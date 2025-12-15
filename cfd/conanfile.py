@@ -1,0 +1,16 @@
+from conan import ConanFile
+
+
+class Recipe(ConanFile):
+    settings = "os", "compiler", "build_type", "arch"
+    generators = "CMakeToolchain", "CMakeDeps", "VirtualRunEnv"
+
+    def layout(self):
+        self.folders.generators = "conan"
+
+    def requirements(self):
+        if self.settings.os in ["Linux", "Macos"]:
+            self.requires("petsc/system")
+
+    def build_requirements(self):
+        self.test_requires("catch2/3.7.1")
