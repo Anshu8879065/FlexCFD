@@ -1,23 +1,40 @@
-add_library(pdenumerics OBJECT)
+# Create object library for SolTools
+add_library(SolTools OBJECT)
 
-set_target_properties(pdenumerics PROPERTIES LINKER_LANGUAGE CXX)
+# Force C++ linker
+set_target_properties(SolTools PROPERTIES LINKER_LANGUAGE CXX)
 
-target_sources(pdenumerics
+# Include directories so headers can be found
+target_include_directories(SolTools
     PUBLIC
-        GetIndex.hpp
-        IterCallbacks.hpp
-        PetscWrap.hpp
-        SolTools.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/casulliwrap
+        ${CMAKE_CURRENT_SOURCE_DIR}/petscwrap
 )
 
-target_link_libraries(pdenumerics
+# Add sources and headers
+target_sources(SolTools
+    PUBLIC
+        Soltools.hpp
+        casulliwrap/Casulliwrap.hpp
+        casulliwrap/CG.hpp
+        petscwrap/GetIndex.hpp
+        petscwrap/IterCallbacks.hpp
+        petscwrap/PetscInitException.hpp
+        petscwrap/PetscOptions.hpp
+        petscwrap/PetscWrap.hpp
+)
+
+# Link with dependencies
+target_link_libraries(SolTools
     PUBLIC
         itertools
         pdemodel
         PETSc::PETSc
 )
 
-target_compile_features(pdenumerics
+# Set C++ standard
+target_compile_features(SolTools
     PUBLIC
         cxx_std_20
 )
