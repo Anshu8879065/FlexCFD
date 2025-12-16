@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # FlexCFD
 
 FlexCFD is a modular C++ framework for the development of
@@ -24,3 +25,24 @@ FlexCFD/
 See petscwrap/README.md for PETSc infrastructure.
 See casulliwrap/README.md for Casulli SWE discretization.
 
+=======
+# flexcfd
+
+This is the flexcfd project.
+
+# Building and installing
+
+See the [BUILDING](BUILDING.md) document.
+
+# Contributing
+
+See the [CONTRIBUTING](CONTRIBUTING.md) document.
+
+# Licensing
+
+<!--
+Please go to https://choosealicense.com/licenses/ and choose a license that
+fits your needs. The recommended license for a project of this type is the
+Boost Software License 1.0.
+-->
+>>>>>>> 40d002f (Move petscwrap contents to top-level and remove petscwrap folder)
