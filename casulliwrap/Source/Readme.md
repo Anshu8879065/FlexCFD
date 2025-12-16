@@ -15,7 +15,7 @@ purposes.
 ## Features
 
 - Shallow Water Equations (SWE) formulation
-- Casulli-type semi-implicit discretization
+- Casulli-type semi-implicit and Euler lagrangian discretization
 - Structured grid support
 - Clear separation between:
   - PDE model definitions
