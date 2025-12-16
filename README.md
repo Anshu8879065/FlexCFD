@@ -15,6 +15,11 @@
 
 ---
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![C++](https://img.shields.io/badge/C++-20-blue)](https://isocpp.org)
+[![Build](https://img.shields.io/badge/build-CMake-brightgreen)](https://cmake.org)
+[![PETSc](https://img.shields.io/badge/dependency-PETSc-orange)](https://petsc.org/)
+
 ## Repository Structure
 
 ```text
