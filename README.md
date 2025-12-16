@@ -1,7 +1,7 @@
 # FlexCFD
 
 FlexCFD is a modular C++ framework for the development of
-finite-difference and finite-volume solvers for partial differential
+finite-difference numerical solvers for partial differential
 equations, with a focus on **computational fluid dynamics (CFD)** and
 **shallow water equations (SWE)**.
 
