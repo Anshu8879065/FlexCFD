@@ -12,7 +12,7 @@ namespace fcfd::pdemodel
 {
 
 template<std::floating_point FloatingPointType, typename PDEOptions>
-class CasulliSVE1 : public PDESystem<FloatingPointType, PDEOptions>
+class CasulliSVE : public PDESystem<FloatingPointType, PDEOptions>
 {
 public:
   using PDESystem<FloatingPointType, PDEOptions>::InitPDESys;
@@ -22,7 +22,7 @@ public:
   /// Casulli 1D free-surface hydrodynamics model
   /// Primary unknowns: (eta, u)
   ///
-  CasulliSVE1()
+  CasulliSVE()
     : PDESystem<FloatingPointType, PDEOptions>(
         PDEType::CasulliSVE1d,
         PDEParams<PDEOptions>(1, 2, 0, PDEOptions()))
@@ -36,7 +36,7 @@ public:
   ///
   /// \brief Constructor
   ///
-  CasulliSVE1(
+  CasulliSVE(
     Model1dParams<FloatingPointType> const& modelParams,
     int nfield,
     Grid1dParams const& gridParams)
