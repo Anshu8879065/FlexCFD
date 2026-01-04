@@ -1,16 +1,19 @@
+// PDEType.hpp
 #pragma once
+
+#include <cstdint>
 
 namespace fcfd::pdemodel
 {
 
-enum class PDEType
+enum class PDEType : uint8_t
 {
-  Unknown,
+  Unknown = 0,
   SVE,
+  SVEcas,
   SWE2d,
-  SWE3d,
-  CasulliSVE,
-  CasulliSVE2d
+  SWE2dcas,
+  SWE3d
 };
 
 }  // namespace fcfd::pdemodel
