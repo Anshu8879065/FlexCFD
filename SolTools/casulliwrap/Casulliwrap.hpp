@@ -23,7 +23,7 @@
 #include "PDEType.hpp"
 
 // PDE models
-#include "svecas.hpp"
+#include "SVEcas.hpp"
 #include "SWE2dcas.hpp"
 
 namespace fcfd::pdenumerics
