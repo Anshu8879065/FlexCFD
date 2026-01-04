@@ -1,19 +1,28 @@
 #pragma once
 
+#include <concepts>
+
 namespace fcfd::pdemodel
 {
 
-template<typename PDEOptions>
+template<std::semiregular PDEOptions>
 struct PDEParams
 {
-  PDEOptions myopts;
+  PDEOptions myopts {};
+
+  //! Number of dimensions
   int nd {};
+
+  //! Number of variables per grid cell
   int nv {};
+
+  //! Number of boundary conditions
   int nbound {};
 
-  explicit PDEParams(int nd, int nv) noexcept
-    : nd(nd)
-    , nv(nv)
+  // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+  constexpr explicit PDEParams(int numDims, int numGridVars) noexcept
+    : nd(numDims)
+    , nv(numGridVars)
   {
   }
 };
