@@ -1,7 +1,13 @@
 #pragma once
 
+#include <cmath>          // std::abs, std::pow
 #include <concepts>
+#include <optional>
+#include <span>
+#include <unordered_map>
+#include <vector>
 
+#include "BoundaryCondition.hpp"
 #include "ModelParams.hpp"
 #include "PDEParams.hpp"
 #include "PDESystem.hpp"
@@ -10,53 +16,327 @@
 namespace fcfd::pdemodel
 {
 
+// =========================================================================
+// EXTENSION: SVE (1D Saint-Venant Equations, conservative form)
+// State: U = [A, Q]^T
+// Flux:  F(U) = [ Q,  Q^2/A + g A^2/2 ]^T
+// Source (momentum): g A (S0 - Sf),   Sf = n_M^2 Q |Q| / A^(10/3),   S0 = -dz_b/dx
+// =========================================================================
+
 template<std::floating_point FloatingPointType, typename PDEOptions>
-class SVE : public PDESystem<FloatingPointType, PDEOptions>
+class SVE final : public PDESystem<FloatingPointType, PDEOptions>
 {
 public:
-  using PDESystem<FloatingPointType, PDEOptions>::InitPDESys;
+  using Base = PDESystem<FloatingPointType, PDEOptions>;
+  using Base::InitPDESys;
 
-  ///
-  /// \brief Default constructor.
-  /// Creates a default SVE instance, with default values for model parameters
-  ///
   SVE()
-    : PDESystem<FloatingPointType, PDEOptions>(
-        PDEType::SVE, PDEParams<PDEOptions>(1, 2, 0, PDEOptions()))
+    : Base(PDEType::SVE, PDEParams<PDEOptions>(1, 2))
     , m_modelParams(defaultModelParams)
   {
+    SetBottom();
+    SetInitCond();
+    SetBdryCond();
+
+    SetLHSOp();
+    SetRHSFunc();
+    SetJacLHSOp();
+    SetJacRHS();
+
     InitPDESys();
   }
 
-  ///
-  /// \brief Constructor
-  /// Creates a SVE instance with the given model parameters and number of fields
-  /// \param[in] modelParams The model parameters
-  /// \param[in] nfield The number of fields
-  ///
-  SVE(Model1dParams<FloatingPointType> const& modelParams, int nfield)
-    : PDESystem<FloatingPointType, PDEOptions>(
-        PDEType::SVE, PDEParams<PDEOptions>(1, nfield, 0, PDEOptions()))
+  explicit SVE(Model1dParams<FloatingPointType> const& modelParams)
+    : Base(PDEType::SVE, PDEParams<PDEOptions>(1, 2))
     , m_modelParams(modelParams)
   {
+    SetBottom();
+    SetInitCond();
+    SetBdryCond();
+
+    SetLHSOp();
+    SetRHSFunc();
+    SetJacLHSOp();
+    SetJacRHS();
+
     InitPDESys();
   }
 
-  ///
-  /// \brief Get the model parameters for this PDE system
-  /// \returns The model parameters for the PDE system
-  ///
-  auto GetModelParams() -> Model1dParams<FloatingPointType>
+  auto GetModelParams() const noexcept -> Model1dParams<FloatingPointType>
   {
     return m_modelParams;
   }
 
+  // -----------------------------
+  // SVE: Initial condition
+  // returns U0(x) = [A0, Q0]
+  // -----------------------------
+  void SetInitCond() override
+  {
+    this->Base::SetInitCond(
+      [this](std::vector<FloatingPointType> const& /*x*/) -> std::vector<FloatingPointType>
+      {
+        // From your setup: A(x,0)=20, Q(x,0)=20
+        return std::vector<FloatingPointType>{
+          FloatingPointType(20.0), // A0
+          FloatingPointType(20.0)  // Q0
+        };
+      });
+  }
+
+  auto InitCond() -> FloatingPointType override { return FloatingPointType{}; }
+
+  // -----------------------------
+  // SVE: Boundary conditions
+  // IDs:
+  //   1 = inlet (x=0)
+  //   2 = outlet (x=L)
+  // Subcritical: prescribe Q at inlet, A at outlet
+  // (Dirichlet returns full [A,Q] vector as your BC interface expects)
+  // -----------------------------
+  void SetBdryCond() override
+  {
+    std::unordered_map<int, BoundaryCondition<FloatingPointType>> bcs;
+
+    // Inlet (ID 1): Dirichlet on Q (and A kept consistent with your initial guess)
+    bcs[1] = BoundaryCondition<FloatingPointType>(
+      BoundaryType::Dirichlet,
+      [](auto const&, auto) -> std::vector<FloatingPointType>
+      {
+        return std::vector<FloatingPointType>{
+          FloatingPointType(20.0), // A (kept at initial guess here)
+          FloatingPointType(20.0)  // Q prescribed
+        };
+      });
+
+    // Outlet (ID 2): Dirichlet on A (and Q kept consistent with your initial guess)
+    bcs[2] = BoundaryCondition<FloatingPointType>(
+      BoundaryType::Dirichlet,
+      [](auto const&, auto) -> std::vector<FloatingPointType>
+      {
+        return std::vector<FloatingPointType>{
+          FloatingPointType(20.0), // A prescribed
+          FloatingPointType(20.0)  // Q (kept at initial guess here)
+        };
+      });
+
+    this->Base::SetBdryCond(std::move(bcs), /*numConds=*/2);
+  }
+
+  auto BdryCond() -> FloatingPointType override { return FloatingPointType{}; }
+
+  // -----------------------------
+  // Bottom / bathymetry: z_b(x)
+  // Placeholder; replace with your real bed profile.
+  // -----------------------------
+  void SetBottom() override
+  {
+    Base::SetBottom(
+      [](std::span<const FloatingPointType> /*coords*/) -> std::vector<FloatingPointType>
+      {
+        return {FloatingPointType(0)};
+      });
+  }
+
+  // -----------------------------
+  // RHS source term: only momentum source is non-zero
+  // -----------------------------
+  void SetRHSFunc() override
+  {
+    Base::SetRHSFunc(
+      [this](std::vector<FloatingPointType> const& input,
+             std::vector<FloatingPointType>& out,
+             int /*field*/) -> std::vector<FloatingPointType>
+      {
+        if (out.size() != 2) out.resize(2);
+
+        const FloatingPointType A = input[0];
+        const FloatingPointType Q = input[1];
+
+        const FloatingPointType g  = m_modelParams.g;
+        const FloatingPointType nM = m_modelParams.nm;
+
+        FloatingPointType Sf = FloatingPointType(0);
+        if (A > m_dryTol) {
+          Sf = (nM * nM) * Q * std::abs(Q) / std::pow(A, FloatingPointType(10.0 / 3.0));
+        }
+
+        out[0] = FloatingPointType(0);
+        out[1] = g * A * (m_S0 - Sf);
+
+        return out;
+      });
+  }
+
+  // -----------------------------
+  // LHS split:
+  // A-split: U_t
+  // B-split: F(U)_x
+  // -----------------------------
+  void SetLHSOp() override
+  {
+    auto lhsa =
+      [](std::vector<FloatingPointType> const& /*input*/,
+         std::vector<FloatingPointType> const& vdot,
+         std::vector<FloatingPointType> const& /*dvdx*/,
+         std::optional<std::vector<FloatingPointType>> const& /*dv2dx*/,
+         std::optional<std::vector<FloatingPointType>> const& /*dv3dx*/,
+         std::vector<FloatingPointType>& out) -> std::vector<FloatingPointType>
+    {
+      if (out.size() != 2) out.resize(2);
+      out[0] = vdot[0]; // dA/dt
+      out[1] = vdot[1]; // dQ/dt
+      return out;
+    };
+
+    auto lhsb =
+      [this](std::vector<FloatingPointType> const& input,
+             std::vector<FloatingPointType> const& /*vdot*/,
+             std::vector<FloatingPointType> const& dvdx,
+             std::optional<std::vector<FloatingPointType>> const& /*dv2dx*/,
+             std::optional<std::vector<FloatingPointType>> const& /*dv3dx*/,
+             std::vector<FloatingPointType>& out) -> std::vector<FloatingPointType>
+    {
+      if (out.size() != 2) out.resize(2);
+
+      const FloatingPointType A  = input[0];
+      const FloatingPointType Q  = input[1];
+      const FloatingPointType Ax = dvdx[0]; // dA/dx
+      const FloatingPointType Qx = dvdx[1]; // dQ/dx
+
+      const FloatingPointType g = m_modelParams.g;
+
+      // F1 = Q  => (F1)_x = Qx
+      out[0] = Qx;
+
+      // F2 = Q^2/A + g A^2/2
+      FloatingPointType flux2_x = FloatingPointType(0);
+      if (A > m_dryTol) {
+        const FloatingPointType dF2dA = (g * A) - (Q * Q) / (A * A);
+        const FloatingPointType dF2dQ = (FloatingPointType(2) * Q) / A;
+        flux2_x = dF2dA * Ax + dF2dQ * Qx;
+      }
+
+      out[1] = flux2_x;
+      return out;
+    };
+
+    Base::SetLHSOp(lhsa, lhsb);
+  }
+
+  // -----------------------------
+  // Jacobian of LHS (A-split and B-split)
+  // derivo == 0 : w.r.t vdot
+  // derivo == 1 : w.r.t dvdx
+  // -----------------------------
+  void SetJacLHSOp() override
+  {
+    auto jac_lhsa =
+      [](std::vector<FloatingPointType> const& /*input*/,
+         std::vector<FloatingPointType> const& /*vdot*/,
+         std::vector<FloatingPointType> const& /*dvdx*/,
+         std::optional<std::vector<FloatingPointType>> const& /*dv2dx*/,
+         std::optional<std::vector<FloatingPointType>> const& /*dv3dx*/,
+         std::vector<FloatingPointType>& out,
+         int rowo, int colo, int derivo) -> std::vector<FloatingPointType>
+    {
+      if (out.size() != 2) out.assign(2, FloatingPointType(0));
+
+      if (derivo == 0) {
+        out[0] = (rowo == 0 && colo == 0) ? FloatingPointType(1) : FloatingPointType(0);
+        out[1] = (rowo == 1 && colo == 1) ? FloatingPointType(1) : FloatingPointType(0);
+      }
+      return out;
+    };
+
+    auto jac_lhsb =
+      [this](std::vector<FloatingPointType> const& input,
+             std::vector<FloatingPointType> const& /*vdot*/,
+             std::vector<FloatingPointType> const& /*dvdx*/,
+             std::optional<std::vector<FloatingPointType>> const& /*dv2dx*/,
+             std::optional<std::vector<FloatingPointType>> const& /*dv3dx*/,
+             std::vector<FloatingPointType>& out,
+             int rowo, int colo, int derivo) -> std::vector<FloatingPointType>
+    {
+      if (out.size() != 2) out.assign(2, FloatingPointType(0));
+      if (derivo != 1) return out;
+
+      const FloatingPointType A = input[0];
+      const FloatingPointType Q = input[1];
+      const FloatingPointType g = m_modelParams.g;
+
+      FloatingPointType dF2dA = FloatingPointType(0);
+      FloatingPointType dF2dQ = FloatingPointType(0);
+      if (A > m_dryTol) {
+        dF2dA = (g * A) - (Q * Q) / (A * A);
+        dF2dQ = (FloatingPointType(2) * Q) / A;
+      }
+
+      if (rowo == 0 && colo == 0) out[0] = FloatingPointType(0);
+      if (rowo == 0 && colo == 1) out[0] = FloatingPointType(1);
+
+      if (rowo == 1 && colo == 0) out[1] = dF2dA;
+      if (rowo == 1 && colo == 1) out[1] = dF2dQ;
+
+      return out;
+    };
+
+    Base::SetJacLHSOp(jac_lhsa, jac_lhsb);
+  }
+
+  // -----------------------------
+  // Jacobian of RHS source S(U)
+  // out[0] = dS2/dA, out[1] = dS2/dQ
+  // -----------------------------
+  void SetJacRHS() override
+  {
+    Base::SetJacRHS(
+      [this](std::vector<FloatingPointType> const& input,
+             std::vector<FloatingPointType>& out,
+             int /*field*/) -> std::vector<FloatingPointType>
+      {
+        if (out.size() != 2) out.assign(2, FloatingPointType(0));
+
+        const FloatingPointType A = input[0];
+        const FloatingPointType Q = input[1];
+
+        const FloatingPointType g  = m_modelParams.g;
+        const FloatingPointType nM = m_modelParams.nm;
+
+        if (A <= m_dryTol) return out;
+
+        const FloatingPointType absQ = std::abs(Q);
+        const FloatingPointType A_pow_10_3 = std::pow(A, FloatingPointType(10.0 / 3.0));
+        const FloatingPointType Sf = (nM * nM) * Q * absQ / A_pow_10_3;
+
+        const FloatingPointType dSf_dQ =
+          (nM * nM) * (FloatingPointType(2) * absQ) / A_pow_10_3;
+
+        const FloatingPointType dSf_dA =
+          -(FloatingPointType(10.0 / 3.0)) * (nM * nM) * Q * absQ / std::pow(A, FloatingPointType(13.0 / 3.0));
+
+        out[0] = g * (m_S0 - Sf) + g * A * (-dSf_dA);
+        out[1] = g * A * (-dSf_dQ);
+
+        return out;
+      });
+  }
+
 private:
-  Model1dParams<FloatingPointType> m_modelParams {};
-  
-  static constexpr Model1dParams<FloatingPointType> defaultModelParams {
-    .g = 9.8, .nu = 1.0, .gammat = 0.1, .gamman = 0.8, .nm = 1.0, .wsurf = 2.0, .radi = 0.7
+  Model1dParams<FloatingPointType> m_modelParams{};
+
+  static constexpr Model1dParams<FloatingPointType> defaultModelParams{
+    .g = FloatingPointType(9.8),
+    .nu = FloatingPointType(1.0),
+    .gammat = FloatingPointType(0.1),
+    .gamman = FloatingPointType(0.8),
+    .nm = FloatingPointType(0.03),
+    .wsurf = FloatingPointType(2.0),
+    .radi = FloatingPointType(0.7)
   };
+
+  FloatingPointType m_S0{FloatingPointType(0)};
+  FloatingPointType m_dryTol{FloatingPointType(1e-12)};
 };
 
 } // namespace fcfd::pdemodel
