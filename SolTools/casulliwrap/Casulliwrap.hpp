@@ -16,7 +16,7 @@
 #include <iostream>
 #include <iomanip>
 
-#include "Soltools.hpp"
+#include "SolTools.hpp"
 #include "CasulliMethodProps.hpp"
 
 #include "PDESystem.hpp"
