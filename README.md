@@ -1,7 +1,10 @@
 # flexcfd
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![C++](https://img.shields.io/badge/C++-20-blue)](https://isocpp.org)
+[![Build](https://img.shields.io/badge/build-CMake-brightgreen)](https://cmake.org)
+[![PETSc](https://img.shields.io/badge/dependency-PETSc-orange)](https://petsc.org/)
 
 This is the flexcfd project.
-# FlexCFD
 
 **FlexCFD** is a modular C++ framework for solving partial differential equations (PDEs) on structured grids using finite-difference methods, with a focus on **computational fluid dynamics (CFD)** and **shallow water equations (SWE)**.
 
