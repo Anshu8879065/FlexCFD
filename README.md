@@ -101,19 +101,18 @@ FlexCFD currently provides two solver backends:
 └── structure.txt                     # Repository structure notes / reference output
 
 
+## Background
+
+This project implements two solvers for PDE systems: CasulliWrap and PetscWrap. PetscWrap is a PDE-agnostic wrapper around [PETSc](https://petsc.org/release/) routines.
+
+As it is PDE-agnostic, to implement a solver for your particular PDE, you have to extend the PDESystem class found in PDEs/PDESystem.hpp, through which you will provide implementations for functions that define how boundary conditions, initial conditions, etc. are handled. These procedures are then fed in to PETSc through PetscWrap for its use.
+
+Examples of solvers for PDEs are present in the PDEs/SVE/SVE.hpp file, which implements the Saint-Venant equations, and PDEs/SWE/SWE2d.hpp file, which implements the 2D Shallow Water equations.
+
 # Building and installing
 
 See the [BUILDING](BUILDING.md) document.
 
-# Contributing
 
-See the [CONTRIBUTING](CONTRIBUTING.md) document.
 
-# Licensing
-
-<!--
-Please go to https://choosealicense.com/licenses/ and choose a license that
-fits your needs. The recommended license for a project of this type is the
-Boost Software License 1.0.
--->
 
