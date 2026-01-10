@@ -6,10 +6,34 @@ PETSc version 3.24.2
 
 ## Build
 
+This project defines two executable targets and one library target:
+    - `flexcfd_exe`, an executable for the `Example/petscmain.cpp` example
+    - `casulli_exe`, an executable for the `Example/Casulliwrap.cpp` example
+    - `flexcfd_lib`, an object library used by both of the above executable targets.
+
+`flexcfd_lib` is further composed of three libraries:
+    - `flexcfd_itertools`, a header-only library which bundles the files in the `Utils` directory
+    - `flexcfd_pdemodel`, a header-only library which bundles the files in the `PDEs` directory
+    - `flexcfd_pdenumerics`, an object library which bundles the header and source files in the `Numerics` directory
+
+Should you wish to use any of these component libraries in a custom solver implementation, you can link to them like so:
+
+```cmake
+# Create an executable target with your desired name
+add_executable(my_solver)
+
+# Link to the flexcfd_lib OBJECT library
+# Alternatively, you could link to any of its sub-components
+target_link_libraries(my_solver PRIVATE flexcfd_lib)
+
+# Set the C++ standard you want to use
+target_compile_features(my_solver PRIVATE cxx_std_20)
+```
+
 This project doesn't require any special command-line flags to build to keep
 things simple.
 
-Here are the steps for building in release mode with a single-configuration
+Here are the steps for building all the targets in release mode with a single-configuration
 generator, like the Unix Makefiles one:
 
 ```sh
@@ -17,7 +41,14 @@ cmake -S . -B build -D CMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-Here are the steps for building in release mode with a multi-configuration
+Should you desire to build just a single executable target (say the one for PetscWrap), you can do so like this:
+
+```sh
+cmake -S . -B build -D CMAKE_BUILD_TYPE=Release
+cmake --build build --target flexcfd_exe
+```
+
+Here are the steps for building all the targets in release mode with a multi-configuration
 generator, like the Visual Studio ones:
 
 ```sh
