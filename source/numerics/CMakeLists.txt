@@ -12,16 +12,17 @@ target_sources(flexcfd_pdenumerics
         GetIndex.hpp
         IterCallbacks.hpp
         SolTools.hpp
+        petscwrap/PetscUtils.hpp
         petscwrap/PetscWrap.hpp
         casulliwrap/CasulliMethodProps.hpp
         casulliwrap/CasulliWrap.hpp
     PRIVATE
-        petscwrap/PetscWrap.cpp
+        petscwrap/PetscUtils.cpp
 )
 
 target_link_libraries(flexcfd_pdenumerics
     PUBLIC
-        flexcfd_itertools
+        flexcfd_utils
         flexcfd_pdemodel
         PkgConfig::PETSC
 )
@@ -29,7 +30,7 @@ target_link_libraries(flexcfd_pdenumerics
 target_include_directories(flexcfd_pdenumerics
     ${warning_guard}
     PUBLIC
-        "\$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>"
+        "\$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/source>"
 )
 
 target_compile_features(flexcfd_pdenumerics

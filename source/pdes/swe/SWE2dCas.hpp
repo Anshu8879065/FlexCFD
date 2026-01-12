@@ -1,4 +1,4 @@
-// SWE2dcas.hpp
+// SWE2dCas.hpp
 #pragma once
 
 #include <algorithm>
@@ -9,11 +9,11 @@
 #include <unordered_map>
 #include <vector>
 
-#include "BoundaryCondition.hpp"
-#include "ModelParams.hpp"
-#include "PDEParams.hpp"
-#include "PDESystem.hpp"
-#include "PDEType.hpp"
+#include "pdes/BoundaryCondition.hpp"
+#include "pdes/ModelParams.hpp"
+#include "pdes/PDEParams.hpp"
+#include "pdes/PDESystem.hpp"
+#include "pdes/PDEType.hpp"
 
 namespace fcfd::pdemodel
 {
@@ -21,21 +21,17 @@ namespace fcfd::pdemodel
 enum class SubcriticalBC2D : int
 {
   StageEta,  // prescribe eta
-  Velocity  // prescribe normal velocity (u on left/right, v on bottom/top)
+  Velocity   // prescribe normal velocity (u on left/right, v on bottom/top)
 };
 
 template<std::floating_point Real>
 struct CasulliBC2D
 {
-  // left/right normal velocity is u; bottom/top normal velocity is v
   SubcriticalBC2D left = SubcriticalBC2D::Velocity;
   SubcriticalBC2D right = SubcriticalBC2D::StageEta;
   SubcriticalBC2D bottom = SubcriticalBC2D::Velocity;
   SubcriticalBC2D top = SubcriticalBC2D::StageEta;
 
-  // meaning depends on type:
-  // StageEta: value = eta
-  // Velocity: value = normal velocity
   Real left_value {Real(0)};
   Real right_value {Real(0)};
   Real bottom_value {Real(0)};
@@ -66,15 +62,8 @@ public:
     InitPDESys();
   }
 
-  auto ModelParams() noexcept -> Model2dParams<Real>&
-  {
-    return m_modelParams;
-  }
-
-  auto ModelParams() const noexcept -> Model2dParams<Real> const&
-  {
-    return m_modelParams;
-  }
+  auto ModelParams() noexcept -> Model2dParams<Real>& { return m_modelParams; }
+  auto ModelParams() const noexcept -> Model2dParams<Real> const& { return m_modelParams; }
 
   // IC seeds
   void SetIC(Real eta0, Real u0, Real v0)
@@ -84,7 +73,7 @@ public:
     m_v0 = v0;
   }
 
-  // constant bottom default; optional planar slopes
+  // constant bottom; optional planar slopes
   void SetBed(Real h0, Real Sx = Real(0), Real Sy = Real(0))
   {
     m_h0 = h0;
@@ -104,52 +93,23 @@ public:
   }
 
   // getters for wrap
-  auto Eta0() const noexcept -> Real
-  {
-    return m_eta0;
-  }
+  auto Eta0() const noexcept -> Real { return m_eta0; }
+  auto U0() const noexcept -> Real { return m_u0; }
+  auto V0() const noexcept -> Real { return m_v0; }
 
-  auto U0() const noexcept -> Real
-  {
-    return m_u0;
-  }
+  auto BC() const noexcept -> CasulliBC2D<Real> const& { return m_bc; }
 
-  auto V0() const noexcept -> Real
-  {
-    return m_v0;
-  }
-
-  auto BC() const noexcept -> CasulliBC2D<Real> const&
-  {
-    return m_bc;
-  }
-
-  auto BottomAt(Real x, Real y) const noexcept -> Real
-  {
-    return m_h0 - m_Sx * x - m_Sy * y;
-  }
+  auto BottomAt(Real x, Real y) const noexcept -> Real { return m_h0 - m_Sx * x - m_Sy * y; }
 
   static auto HfromEta(Real h, Real eta) noexcept -> Real
   {
     return std::max(Real(0), h + eta);
   }
 
-  auto WindU() const noexcept -> Real
-  {
-    return m_ua;
-  }
+  auto WindU() const noexcept -> Real { return m_ua; }
+  auto WindV() const noexcept -> Real { return m_va; }
+  auto DryTol() const noexcept -> Real { return m_dryTol; }
 
-  auto WindV() const noexcept -> Real
-  {
-    return m_va;
-  }
-
-  auto DryTol() const noexcept -> Real
-  {
-    return m_dryTol;
-  }
-
-  // Manning-based gamma (same form; u_star is magnitude of predicted velocity at face)
   auto GammaFace(Real H_face, Real speed_star) const noexcept -> Real
   {
     const Real g = m_modelParams.g;
@@ -163,43 +123,21 @@ public:
   }
 
   // PDESystem hooks as no-ops
-  void SetBottom() override
+  void SetBottom() override {}
+  void SetInitCond() override {}
+
+  auto InitCond(std::vector<Real> const&) const -> std::vector<Real> override
   {
+    return std::vector<Real>({Real(0), Real(0), Real(0)});
   }
 
-  void SetInitCond() override
-  {
-  }
+  void SetBdryCond() override {}
+  auto BdryCond() -> Real override { return Real {}; }
 
-  auto InitCond(std::vector<FloatingPointType> const&) const -> std::vector<Real> override
-  {
-    return std::vector<Real>({0, 0, 0});
-  }
-
-  void SetBdryCond() override
-  {
-  }
-
-  auto BdryCond() -> Real override
-  {
-    return Real {};
-  }
-
-  void SetRHSFunc() override
-  {
-  }
-
-  void SetJacRHS() override
-  {
-  }
-
-  void SetLHSOp() override
-  {
-  }
-
-  void SetJacLHSOp() override
-  {
-  }
+  void SetRHSFunc() override {}
+  void SetJacRHS() override {}
+  void SetLHSOp() override {}
+  void SetJacLHSOp() override {}
 
 private:
   void InstallNoOpHooks()
@@ -220,42 +158,36 @@ private:
         return {H0, m_u0, m_v0};
       });
 
-    // placeholder transmissive BC map (CasulliWrap uses BC() instead)
+    // transmissive placeholder BC map (CasulliWrap uses BC() instead)
     std::unordered_map<int, BoundaryCondition<Real>> bcs;
     auto transmissive = [](std::vector<Real> const& u_inner, Real) -> std::vector<Real> { return u_inner; };
-    bcs[1] = BoundaryCondition<Real>(BoundaryType::Neumann, transmissive);  // left
-    bcs[2] = BoundaryCondition<Real>(BoundaryType::Neumann, transmissive);  // right
-    bcs[3] = BoundaryCondition<Real>(BoundaryType::Neumann, transmissive);  // bottom
-    bcs[4] = BoundaryCondition<Real>(BoundaryType::Neumann, transmissive);  // top
+    bcs[1] = BoundaryCondition<Real>(BoundaryType::Neumann, transmissive);
+    bcs[2] = BoundaryCondition<Real>(BoundaryType::Neumann, transmissive);
+    bcs[3] = BoundaryCondition<Real>(BoundaryType::Neumann, transmissive);
+    bcs[4] = BoundaryCondition<Real>(BoundaryType::Neumann, transmissive);
     Base::SetBdryCond(std::move(bcs), 4);
 
-    // no-op operators
-    Base::SetRHSFunc(
-      [](std::vector<Real> const&, std::vector<Real>& out, int) -> std::vector<Real>
-      {
-        out.assign(3, Real(0));
-        return out;
-      });
-
-    Base::SetJacRHS(
-      [](std::vector<Real> const&, std::vector<Real>& out, int) -> std::vector<Real>
-      {
-        out.assign(3, Real(0));
-        return out;
-      });
+    // no-op RHS/JacRHS
+    Base::SetRHSFunc([](std::vector<Real> const&, std::vector<Real>& out, int) -> void { out.assign(3, Real(0)); });
+    Base::SetJacRHS([](std::vector<Real> const&, std::vector<Real>& out, int) -> void { out.assign(3, Real(0)); });
 
     auto lhsa = [](std::vector<Real> const&,
                   std::vector<Real> const& vdot,
                   std::vector<Real> const&,
                   std::optional<std::vector<Real>> const&,
                   std::optional<std::vector<Real>> const&,
-                  std::vector<Real>& out) -> std::vector<Real>
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::vector<Real>& out) -> void
     {
       out = vdot;
       if (out.size() != 3) {
         out.resize(3, Real(0));
       }
-      return out;
     };
 
     auto lhsb = [](std::vector<Real> const&,
@@ -263,10 +195,15 @@ private:
                   std::vector<Real> const&,
                   std::optional<std::vector<Real>> const&,
                   std::optional<std::vector<Real>> const&,
-                  std::vector<Real>& out) -> std::vector<Real>
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::vector<Real>& out) -> void
     {
       out.assign(3, Real(0));
-      return out;
     };
 
     Base::SetLHSOp(lhsa, lhsb);
@@ -276,13 +213,18 @@ private:
                   std::vector<Real> const&,
                   std::optional<std::vector<Real>> const&,
                   std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
+                  std::optional<std::vector<Real>> const&,
                   std::vector<Real>& out,
                   int,
                   int,
-                  int) -> std::vector<Real>
+                  int) -> void
     {
       out.assign(3, Real(0));
-      return out;
     };
 
     Base::SetJacLHSOp(jac0, jac0);
@@ -303,7 +245,6 @@ private:
   Real m_va {Real(0)};
 
   CasulliBC2D<Real> m_bc {};
-
   Real m_dryTol {Real(1e-12)};
 };
 

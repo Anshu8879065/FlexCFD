@@ -6,7 +6,7 @@
 #include <memory>
 #include <utility>
 
-#include "PDEs/PDESystem.hpp"
+#include "pdes/PDESystem.hpp"
 
 namespace fcfd::pdenumerics
 {

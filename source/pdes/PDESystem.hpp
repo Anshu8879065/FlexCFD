@@ -22,22 +22,34 @@ template<std::floating_point FloatingPointType, std::semiregular PDEOptions>
 class PDESystem
 {
   using SystemFunctionType = std::function<std::vector<FloatingPointType>(std::vector<FloatingPointType> const&)>;
-  using SystemRHSFunctionType = std::function<std::vector<FloatingPointType>(
-    std::vector<FloatingPointType> const&, std::vector<FloatingPointType>&, int)>;
+  using SystemRHSFunctionType =
+    std::function<void(std::vector<FloatingPointType> const&, std::vector<FloatingPointType>&, int)>;
 
-  using SystemRHSJacFunctionType = std::function<std::vector<FloatingPointType>(
-    std::vector<FloatingPointType> const&, std::vector<FloatingPointType>&, int)>;
+  using SystemRHSJacFunctionType =
+    std::function<void(std::vector<FloatingPointType> const&, std::vector<FloatingPointType>&, int)>;
 
-  using SystemLHSFunctionType = std::function<std::vector<FloatingPointType>(std::vector<FloatingPointType> const&,
+  using SystemLHSFunctionType = std::function<void(std::vector<FloatingPointType> const&,
     std::vector<FloatingPointType> const&,
     std::vector<FloatingPointType> const&,
+    std::optional<std::vector<FloatingPointType>> const&,
+    std::optional<std::vector<FloatingPointType>> const&,
+    std::optional<std::vector<FloatingPointType>> const&,
+    std::optional<std::vector<FloatingPointType>> const&,
+    std::optional<std::vector<FloatingPointType>> const&,
+    std::optional<std::vector<FloatingPointType>> const&,
     std::optional<std::vector<FloatingPointType>> const&,
     std::optional<std::vector<FloatingPointType>> const&,
     std::vector<FloatingPointType>&)>;
 
-  using SystemLHSJacFunctionType = std::function<std::vector<FloatingPointType>(std::vector<FloatingPointType> const&,
+  using SystemLHSJacFunctionType = std::function<void(std::vector<FloatingPointType> const&,
     std::vector<FloatingPointType> const&,
     std::vector<FloatingPointType> const&,
+    std::optional<std::vector<FloatingPointType>> const&,
+    std::optional<std::vector<FloatingPointType>> const&,
+    std::optional<std::vector<FloatingPointType>> const&,
+    std::optional<std::vector<FloatingPointType>> const&,
+    std::optional<std::vector<FloatingPointType>> const&,
+    std::optional<std::vector<FloatingPointType>> const&,
     std::optional<std::vector<FloatingPointType>> const&,
     std::optional<std::vector<FloatingPointType>> const&,
     std::vector<FloatingPointType>&,
@@ -131,7 +143,7 @@ public:
   void RHS(std::vector<FloatingPointType> const& input, std::vector<FloatingPointType>& output, int field)
   {
     assert(m_boolRHSSet && "RHS function has not been set!");
-    output = m_myRHS(input, output, field);
+    m_myRHS(input, output, field);
   }
 
   ///
@@ -143,56 +155,86 @@ public:
   void JacRHS(std::vector<FloatingPointType> const& input, std::vector<FloatingPointType>& output, int field)
   {
     assert(m_boolJacRHSSet && "JacRHS function has not been set!");
-    output = m_myJacRHS(input, output, field);
+    m_myJacRHS(input, output, field);
   }
 
   ///
   /// \brief Compute the LHSAsplit for the implicit function
   /// \param[in] input A std::vector containing the field variables
-  /// \param[in] vdot A std::vector containing the first-order time derivatives of the field variables
-  /// \param[in] dvdx A std::vector containing the first-order space derivatives of the field variables
-  /// \param[in] dv2dx A std::vector containing the second-order space derivatives of the field variables
-  /// \param[in] dv3dx A std::vector containing the third-order space derivatives of the field variables
+  /// \param[in] vdot First-order time derivatives of the field variables
+  /// \param[in] dvdx First-order space derivatives in x direction of the field variables
+  /// \param[in] dvdy First-order space derivatives in y direction of the field variables
+  /// \param[in] dvdz First-order space derivatives in z direction of the field variables
+  /// \param[in] dv2dx Second-order space derivatives in x direction of the field variables
+  /// \param[in] dv2dy Second-order space derivatives in y direction of the field variables
+  /// \param[in] dv2dz Second-order space derivatives in z direction of the field variables
+  /// \param[in] dv3dx Third-order space derivatives in x direction of the field variables
+  /// \param[in] dv3dy Third-order space derivatives in y direction of the field variables
+  /// \param[in] dv3dz Third-order space derivatives in z direction of the field variables
   /// \param[in,out] output A std::vector containing the computed residuals for the implicit function
   ///
   void LHSOpAsplit(std::vector<FloatingPointType> const& input,
     std::vector<FloatingPointType> const& vdot,
     std::vector<FloatingPointType> const& dvdx,
+    std::optional<std::vector<FloatingPointType>> const& dvdy,
+    std::optional<std::vector<FloatingPointType>> const& dvdz,
     std::optional<std::vector<FloatingPointType>> const& dv2dx,
+    std::optional<std::vector<FloatingPointType>> const& dv2dy,
+    std::optional<std::vector<FloatingPointType>> const& dv2dz,
     std::optional<std::vector<FloatingPointType>> const& dv3dx,
+    std::optional<std::vector<FloatingPointType>> const& dv3dy,
+    std::optional<std::vector<FloatingPointType>> const& dv3dz,
     std::vector<FloatingPointType>& output)
   {
     assert(m_boolLHSOpSet && "LHSOp function has not been set!");
-    output = m_myLHSAsplit(input, vdot, dvdx, dv2dx, dv3dx, output);
+    m_myLHSAsplit(input, vdot, dvdx, dvdy, dvdz, dv2dx, dv2dy, dv2dz, dv3dx, dv3dy, dv3dz, output);
   }
 
   ///
   /// \brief Compute the LHSBsplit for the implicit function
   /// \param[in] input A std::vector containing the field variables
-  /// \param[in] vdot A std::vector containing the first-order time derivatives of the field variables
-  /// \param[in] dvdx A std::vector containing the first-order space derivatives of the field variables
-  /// \param[in] dv2dx A std::vector containing the second-order space derivatives of the field variables
-  /// \param[in] dv3dx A std::vector containing the third-order space derivatives of the field variables
+  /// \param[in] vdot First-order time derivatives of the field variables
+  /// \param[in] dvdx First-order space derivatives in x direction of the field variables
+  /// \param[in] dvdy First-order space derivatives in y direction of the field variables
+  /// \param[in] dvdz First-order space derivatives in z direction of the field variables
+  /// \param[in] dv2dx Second-order space derivatives in x direction of the field variables
+  /// \param[in] dv2dy Second-order space derivatives in y direction of the field variables
+  /// \param[in] dv2dz Second-order space derivatives in z direction of the field variables
+  /// \param[in] dv3dx Third-order space derivatives in x direction of the field variables
+  /// \param[in] dv3dy Third-order space derivatives in y direction of the field variables
+  /// \param[in] dv3dz Third-order space derivatives in z direction of the field variables
   /// \param[in,out] output A std::vector containing the computed residuals for the implicit function
   ///
   void LHSOpBsplit(std::vector<FloatingPointType> const& input,
     std::vector<FloatingPointType> const& vdot,
     std::vector<FloatingPointType> const& dvdx,
+    std::optional<std::vector<FloatingPointType>> const& dvdy,
+    std::optional<std::vector<FloatingPointType>> const& dvdz,
     std::optional<std::vector<FloatingPointType>> const& dv2dx,
+    std::optional<std::vector<FloatingPointType>> const& dv2dy,
+    std::optional<std::vector<FloatingPointType>> const& dv2dz,
     std::optional<std::vector<FloatingPointType>> const& dv3dx,
+    std::optional<std::vector<FloatingPointType>> const& dv3dy,
+    std::optional<std::vector<FloatingPointType>> const& dv3dz,
     std::vector<FloatingPointType>& output)
   {
     assert(m_boolLHSOpSet && "LHSOp function has not been set!");
-    output = m_myLHSBsplit(input, vdot, dvdx, dv2dx, dv3dx, output);
+    m_myLHSBsplit(input, vdot, dvdx, dvdy, dvdz, dv2dx, dv2dy, dv2dz, dv3dx, dv3dy, dv3dz, output);
   }
 
   ///
   /// \brief Jacobian LHS operator
   /// \param[in] input A std::vector containing the field variables
-  /// \param[in] vdot A std::vector containing the first-order time derivatives of the field variables
-  /// \param[in] dvdx A std::vector containing the first-order space derivatives of the field variables
-  /// \param[in] dv2dx A std::vector containing the second-order space derivatives of the field variables
-  /// \param[in] dv3dx A std::vector containing the third-order space derivatives of the field variables
+  /// \param[in] vdot First-order time derivatives of the field variables
+  /// \param[in] dvdx First-order space derivatives in x direction of the field variables
+  /// \param[in] dvdy First-order space derivatives in y direction of the field variables
+  /// \param[in] dvdz First-order space derivatives in z direction of the field variables
+  /// \param[in] dv2dx Second-order space derivatives in x direction of the field variables
+  /// \param[in] dv2dy Second-order space derivatives in y direction of the field variables
+  /// \param[in] dv2dz Second-order space derivatives in z direction of the field variables
+  /// \param[in] dv3dx Third-order space derivatives in x direction of the field variables
+  /// \param[in] dv3dy Third-order space derivatives in y direction of the field variables
+  /// \param[in] dv3dz Third-order space derivatives in z direction of the field variables
   /// \param[in,out] output A std::vector containing the computed residuals for the implicit function
   /// \param[in] rowo
   /// \param[in] colo
@@ -201,24 +243,37 @@ public:
   void JacLHSOpAsplit(std::vector<FloatingPointType> const& input,
     std::vector<FloatingPointType> const& vdot,
     std::vector<FloatingPointType> const& dvdx,
+    std::optional<std::vector<FloatingPointType>> const& dvdy,
+    std::optional<std::vector<FloatingPointType>> const& dvdz,
     std::optional<std::vector<FloatingPointType>> const& dv2dx,
+    std::optional<std::vector<FloatingPointType>> const& dv2dy,
+    std::optional<std::vector<FloatingPointType>> const& dv2dz,
     std::optional<std::vector<FloatingPointType>> const& dv3dx,
+    std::optional<std::vector<FloatingPointType>> const& dv3dy,
+    std::optional<std::vector<FloatingPointType>> const& dv3dz,
     std::vector<FloatingPointType>& output,
     int rowo,
     int colo,
     int derivo)
   {
     assert(m_boolJacLHSOpSet && "JacLHSOp function has not been set!");
-    output = m_myJacLHSAsplit(input, vdot, dvdx, dv2dx, dv3dx, output, rowo, colo, derivo);
+    m_myJacLHSAsplit(
+      input, vdot, dvdx, dvdy, dvdz, dv2dx, dv2dy, dv2dz, dv3dx, dv3dy, dv3dz, output, rowo, colo, derivo);
   }
 
   ///
   /// \brief Jacobian LHS operator
   /// \param[in] input A std::vector containing the field variables
-  /// \param[in] vdot A std::vector containing the first-order time derivatives of the field variables
-  /// \param[in] dvdx A std::vector containing the first-order space derivatives of the field variables
-  /// \param[in] dv2dx A std::vector containing the second-order space derivatives of the field variables
-  /// \param[in] dv3dx A std::vector containing the third-order space derivatives of the field variables
+  /// \param[in] vdot First-order time derivatives of the field variables
+  /// \param[in] dvdx First-order space derivatives in x direction of the field variables
+  /// \param[in] dvdy First-order space derivatives in y direction of the field variables
+  /// \param[in] dvdz First-order space derivatives in z direction of the field variables
+  /// \param[in] dv2dx Second-order space derivatives in x direction of the field variables
+  /// \param[in] dv2dy Second-order space derivatives in y direction of the field variables
+  /// \param[in] dv2dz Second-order space derivatives in z direction of the field variables
+  /// \param[in] dv3dx Third-order space derivatives in x direction of the field variables
+  /// \param[in] dv3dy Third-order space derivatives in y direction of the field variables
+  /// \param[in] dv3dz Third-order space derivatives in z direction of the field variables
   /// \param[in,out] output A std::vector containing the computed residuals for the implicit function
   /// \param[in] rowo
   /// \param[in] colo
@@ -227,15 +282,22 @@ public:
   void JacLHSOpBsplit(std::vector<FloatingPointType> const& input,
     std::vector<FloatingPointType> const& vdot,
     std::vector<FloatingPointType> const& dvdx,
+    std::optional<std::vector<FloatingPointType>> const& dvdy,
+    std::optional<std::vector<FloatingPointType>> const& dvdz,
     std::optional<std::vector<FloatingPointType>> const& dv2dx,
+    std::optional<std::vector<FloatingPointType>> const& dv2dy,
+    std::optional<std::vector<FloatingPointType>> const& dv2dz,
     std::optional<std::vector<FloatingPointType>> const& dv3dx,
+    std::optional<std::vector<FloatingPointType>> const& dv3dy,
+    std::optional<std::vector<FloatingPointType>> const& dv3dz,
     std::vector<FloatingPointType>& output,
     int rowo,
     int colo,
     int derivo)
   {
     assert(m_boolJacLHSOpSet && "JacLHSOp function has not been set!");
-    output = m_myJacLHSBsplit(input, vdot, dvdx, dv2dx, dv3dx, output, rowo, colo, derivo);
+    m_myJacLHSBsplit(
+      input, vdot, dvdx, dvdy, dvdz, dv2dx, dv2dy, dv2dz, dv3dx, dv3dy, dv3dz, output, rowo, colo, derivo);
   }
 
   ///
@@ -315,9 +377,7 @@ public:
     // If the RHS function is not set, provide a default function that returns a zero vector
 
     if (!m_boolRHSSet) {
-      auto const rhs = [](std::vector<FloatingPointType> const&,
-                         std::vector<FloatingPointType>&,
-                         int) -> std::vector<FloatingPointType> { return std::vector<FloatingPointType>(); };
+      auto const rhs = [](std::vector<FloatingPointType> const&, std::vector<FloatingPointType>&, int) -> void {};
 
       SetRHSFunc(rhs);
     }
@@ -325,9 +385,7 @@ public:
     // If the Jacobian RHS function is not set, provide a default function.
 
     if (!m_boolJacRHSSet) {
-      auto const jacRhs = [](std::vector<FloatingPointType> const&,
-                            std::vector<FloatingPointType>&,
-                            int) -> std::vector<FloatingPointType> { return std::vector<FloatingPointType>(); };
+      auto const jacRhs = [](std::vector<FloatingPointType> const&, std::vector<FloatingPointType>&, int) -> void {};
 
       SetJacRHS(jacRhs);
     }
@@ -340,16 +398,26 @@ public:
                           std::vector<FloatingPointType> const&,
                           std::optional<std::vector<FloatingPointType>> const&,
                           std::optional<std::vector<FloatingPointType>> const&,
-                          std::vector<FloatingPointType>&) -> std::vector<FloatingPointType>
-      { return std::vector<FloatingPointType>(); };
+                          std::optional<std::vector<FloatingPointType>> const&,
+                          std::optional<std::vector<FloatingPointType>> const&,
+                          std::optional<std::vector<FloatingPointType>> const&,
+                          std::optional<std::vector<FloatingPointType>> const&,
+                          std::optional<std::vector<FloatingPointType>> const&,
+                          std::optional<std::vector<FloatingPointType>> const&,
+                          std::vector<FloatingPointType>&) -> void {};
 
       auto const lhsb = [](std::vector<FloatingPointType> const&,
                           std::vector<FloatingPointType> const&,
                           std::vector<FloatingPointType> const&,
                           std::optional<std::vector<FloatingPointType>> const&,
                           std::optional<std::vector<FloatingPointType>> const&,
-                          std::vector<FloatingPointType>&) -> std::vector<FloatingPointType>
-      { return std::vector<FloatingPointType>(); };
+                          std::optional<std::vector<FloatingPointType>> const&,
+                          std::optional<std::vector<FloatingPointType>> const&,
+                          std::optional<std::vector<FloatingPointType>> const&,
+                          std::optional<std::vector<FloatingPointType>> const&,
+                          std::optional<std::vector<FloatingPointType>> const&,
+                          std::optional<std::vector<FloatingPointType>> const&,
+                          std::vector<FloatingPointType>&) -> void {};
 
       SetLHSOp(lhsa, lhsb);
     }
@@ -362,20 +430,32 @@ public:
                              std::vector<FloatingPointType> const&,
                              std::optional<std::vector<FloatingPointType>> const&,
                              std::optional<std::vector<FloatingPointType>> const&,
+                             std::optional<std::vector<FloatingPointType>> const&,
+                             std::optional<std::vector<FloatingPointType>> const&,
+                             std::optional<std::vector<FloatingPointType>> const&,
+                             std::optional<std::vector<FloatingPointType>> const&,
+                             std::optional<std::vector<FloatingPointType>> const&,
+                             std::optional<std::vector<FloatingPointType>> const&,
                              std::vector<FloatingPointType>&,
                              int,
                              int,
-                             int) { return std::vector<FloatingPointType>(); };
+                             int) -> void {};
 
       auto const jaclhsb = [](std::vector<FloatingPointType> const&,
                              std::vector<FloatingPointType> const&,
                              std::vector<FloatingPointType> const&,
                              std::optional<std::vector<FloatingPointType>> const&,
                              std::optional<std::vector<FloatingPointType>> const&,
+                             std::optional<std::vector<FloatingPointType>> const&,
+                             std::optional<std::vector<FloatingPointType>> const&,
+                             std::optional<std::vector<FloatingPointType>> const&,
+                             std::optional<std::vector<FloatingPointType>> const&,
+                             std::optional<std::vector<FloatingPointType>> const&,
+                             std::optional<std::vector<FloatingPointType>> const&,
                              std::vector<FloatingPointType>&,
                              int,
                              int,
-                             int) { return std::vector<FloatingPointType>(); };
+                             int) -> void {};
 
       SetJacLHSOp(jaclhsa, jaclhsb);
     }

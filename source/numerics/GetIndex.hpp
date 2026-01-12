@@ -4,7 +4,7 @@
 #include <concepts>
 #include <cstddef>
 
-#include "Utils/IterTools.hpp"
+#include "utils/IterTools.hpp"
 
 namespace fcfd::pdenumerics
 {

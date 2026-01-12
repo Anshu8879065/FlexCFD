@@ -8,16 +8,16 @@ target_sources(flexcfd_pdemodel
         PDEParams.hpp
         PDESystem.hpp
         PDEType.hpp
-        SVE/SVE.hpp
-        SVE/SVECas.hpp
-        SWE/SWE2d.hpp
-        SWE/SWE2dCas.hpp
+        sve/SVE.hpp
+        sve/SVECas.hpp
+        swe/SWE2d.hpp
+        swe/SWE2dCas.hpp
 )
 
 target_include_directories(flexcfd_pdemodel
     ${warning_guard}
     INTERFACE
-        "\$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>"
+        "\$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/source>"
 )
 
 

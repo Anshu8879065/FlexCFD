@@ -5,7 +5,7 @@
 #include <petscdmda.h>  // DMDA helpers, DMDAVecGetArrayDOF*, DMDACreate*
 #include <petscvec.h>   // Vec
 
-#include "PetscWrap.hpp"
+#include "PetscUtils.hpp"
 
 namespace fcfd::pdenumerics
 {

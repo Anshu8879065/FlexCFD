@@ -17,13 +17,13 @@
 #include <vector>
 
 #include "CasulliMethodProps.hpp"
-#include "PDEs/PDESystem.hpp"
-#include "PDEs/PDEType.hpp"
-#include "Soltools.hpp"
+#include "numerics/SolTools.hpp"
+#include "pdes/PDESystem.hpp"
+#include "pdes/PDEType.hpp"
 
 // PDE models
-#include "PDEs/SVE/SVECas.hpp"
-#include "PDEs/SWE/SWE2dcas.hpp"
+#include "pdes/sve/SVECas.hpp"
+#include "pdes/swe/SWE2dCas.hpp"
 
 namespace fcfd::pdenumerics
 {

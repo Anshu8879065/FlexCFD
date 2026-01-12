@@ -7,30 +7,18 @@
 #include <unordered_map>
 #include <vector>
 
-#include "PDEs/BoundaryCondition.hpp"
-#include "PDEs/ModelParams.hpp"
-#include "PDEs/PDEParams.hpp"
-#include "PDEs/PDESystem.hpp"
-#include "PDEs/PDEType.hpp"
+#include "pdes/BoundaryCondition.hpp"
+#include "pdes/ModelParams.hpp"
+#include "pdes/PDEParams.hpp"
+#include "pdes/PDESystem.hpp"
+#include "pdes/PDEType.hpp"
 
 namespace fcfd::pdemodel
 {
 
 // ============================================================================
 // SWE2d (2D depth-averaged shallow water, conservative variables)
-// State variables chosen as:
-//   U = [ h, qx, qy ]^T  where qx = U h, qy = V h
-//
-// Continuity:
-//   h_t + (qx)_x + (qy)_y = 0
-//
-// Momentum-x:
-//   (qx)_t + ( (qx^2)/h )_x + ( (qx*qy)/h )_y = - g h (Zs)_x - c_f U sqrt(U^2+V^2)
-//
-// Momentum-y:
-//   (qy)_t + ( (qx*qy)/h )_x + ( (qy^2)/h )_y = - g h (Zs)_y - c_f V sqrt(U^2+V^2)
-//
-// Zs = Zb + h. Since PDESystem::RHS does not get (x,y), you supply (Zs)_x,(Zs)_y via members.
+// State: U = [ h, qx, qy ]^T
 // ============================================================================
 
 template<std::floating_point FloatingPointType, typename PDEOptions>
@@ -77,12 +65,6 @@ public:
     return m_modelParams;
   }
 
-  // -----------------------------
-  // SWE2d: Initial condition
-  // Returns the initial conservative state
-  //   U0(x,y) = [h(x,y,0), qx(x,y,0), qy(x,y,0)]
-  // with a Gaussian hump in h and zero discharges.
-  // -----------------------------
   void SetInitCond() override
   {
     this->Base::SetInitCond(
@@ -102,18 +84,13 @@ public:
         const FloatingPointType h = h0 + dh * std::exp(-r2 / denom);
 
         return std::vector<FloatingPointType> {
-          h,  // depth
-          FloatingPointType(0),  // qx
-          FloatingPointType(0)  // qy
+          h,
+          FloatingPointType(0),
+          FloatingPointType(0)
         };
       });
   }
 
-  // Evaluate the initial condition at spatial location x = [x,y]
-  /**
-   * \brief Get the initial conditions of the PDE system at spacial location x = (x, y)
-   * \returns The initial conditions of the fields of the PDE system
-   */
   auto InitCond(std::vector<FloatingPointType> const& x) const -> std::vector<FloatingPointType> override
   {
     const FloatingPointType xc = FloatingPointType(25.0);
@@ -129,29 +106,23 @@ public:
 
     const FloatingPointType h = h0 + dh * std::exp(-r2 / denom);
 
-    return std::vector<FloatingPointType>({h, 0, 0});
+    return std::vector<FloatingPointType>({h, FloatingPointType(0), FloatingPointType(0)});
   }
 
-  // -----------------------------
-  // SWE2d: Boundary conditions (transmissive / zero-gradient)
-  // IDs below use:
-  //   1 = left, 2 = right, 3 = bottom, 4 = top
-  // This callback returns the interior state unchanged,
-  // which wrapper can use as U_ghost = U_inner.
-  // -----------------------------
   void SetBdryCond() override
   {
     std::unordered_map<int, BoundaryCondition<FloatingPointType>> bcs;
 
-    auto transmissive = [](std::vector<FloatingPointType> const& u_inner, auto /*t*/) -> std::vector<FloatingPointType>
-    {
-      return u_inner;  // zero-gradient / copy-through
-    };
+    auto transmissive =
+      [](std::vector<FloatingPointType> const& u_inner, auto /*t*/) -> std::vector<FloatingPointType>
+      {
+        return u_inner;
+      };
 
-    bcs[1] = BoundaryCondition<FloatingPointType>(BoundaryType::Neumann, transmissive);  // left
-    bcs[2] = BoundaryCondition<FloatingPointType>(BoundaryType::Neumann, transmissive);  // right
-    bcs[3] = BoundaryCondition<FloatingPointType>(BoundaryType::Neumann, transmissive);  // bottom
-    bcs[4] = BoundaryCondition<FloatingPointType>(BoundaryType::Neumann, transmissive);  // top
+    bcs[1] = BoundaryCondition<FloatingPointType>(BoundaryType::Neumann, transmissive);
+    bcs[2] = BoundaryCondition<FloatingPointType>(BoundaryType::Neumann, transmissive);
+    bcs[3] = BoundaryCondition<FloatingPointType>(BoundaryType::Neumann, transmissive);
+    bcs[4] = BoundaryCondition<FloatingPointType>(BoundaryType::Neumann, transmissive);
 
     this->Base::SetBdryCond(std::move(bcs), /*numConds=*/4);
   }
@@ -163,16 +134,17 @@ public:
 
   void SetBottom() override
   {
-    Base::SetBottom([](std::span<const FloatingPointType> /*coords*/) -> std::vector<FloatingPointType>
-      { return {FloatingPointType(0)}; });
+    Base::SetBottom(
+      [](std::span<const FloatingPointType> /*coords*/) -> std::vector<FloatingPointType>
+      {
+        return {FloatingPointType(0)};
+      });
   }
 
   void SetRHSFunc() override
   {
     Base::SetRHSFunc(
-      [this](std::vector<FloatingPointType> const& input,
-        std::vector<FloatingPointType>& out,
-        int /*field*/) -> std::vector<FloatingPointType>
+      [this](std::vector<FloatingPointType> const& input, std::vector<FloatingPointType>& out, int /*field*/) -> void
       {
         if (out.size() != 3) {
           out.resize(3);
@@ -183,32 +155,26 @@ public:
         const FloatingPointType qy = input[2];
 
         const FloatingPointType g = m_modelParams.g;
-        const FloatingPointType cf = m_cf;  // friction coefficient
-        const FloatingPointType rho = m_rho;  // density (kept explicit to match your equation)
+        const FloatingPointType cf = m_cf;
+        const FloatingPointType rho = m_rho;
 
         out[0] = FloatingPointType(0);
 
         if (h <= m_dryTol) {
           out[1] = FloatingPointType(0);
           out[2] = FloatingPointType(0);
-          return out;
+          return;
         }
 
         const FloatingPointType U = qx / h;
         const FloatingPointType V = qy / h;
         const FloatingPointType speed = std::sqrt(U * U + V * V);
 
-        // (sigma_xz)_b = rho * cf * U * speed
-        // (sigma_yz)_b = rho * cf * V * speed
         const FloatingPointType sig_xz_b = rho * cf * U * speed;
         const FloatingPointType sig_yz_b = rho * cf * V * speed;
 
-        // - g h (Zs)_x - (1/rho) (sigma_xz)_b
-        // - g h (Zs)_y - (1/rho) (sigma_yz)_b
         out[1] = -g * h * m_dZs_dx - (sig_xz_b / rho);
         out[2] = -g * h * m_dZs_dy - (sig_yz_b / rho);
-
-        return out;
       });
   }
 
@@ -218,24 +184,35 @@ public:
                   std::vector<FloatingPointType> const& vdot,
                   std::vector<FloatingPointType> const& /*dvdx*/,
                   std::optional<std::vector<FloatingPointType>> const& /*dvdy*/,
+                  std::optional<std::vector<FloatingPointType>> const& /*dvdz*/,
+                  std::optional<std::vector<FloatingPointType>> const& /*dv2dx*/,
+                  std::optional<std::vector<FloatingPointType>> const& /*dv2dy*/,
+                  std::optional<std::vector<FloatingPointType>> const& /*dv2dz*/,
                   std::optional<std::vector<FloatingPointType>> const& /*dv3dx*/,
-                  std::vector<FloatingPointType>& out) -> std::vector<FloatingPointType>
+                  std::optional<std::vector<FloatingPointType>> const& /*dv3dy*/,
+                  std::optional<std::vector<FloatingPointType>> const& /*dv3dz*/,
+                  std::vector<FloatingPointType>& out) -> void
     {
       if (out.size() != 3) {
         out.resize(3);
       }
-      out[0] = vdot[0];  // dh/dt
-      out[1] = vdot[1];  // d(qx)/dt
-      out[2] = vdot[2];  // d(qy)/dt
-      return out;
+      out[0] = vdot[0];
+      out[1] = vdot[1];
+      out[2] = vdot[2];
     };
 
     auto lhsb = [this](std::vector<FloatingPointType> const& input,
                   std::vector<FloatingPointType> const& /*vdot*/,
                   std::vector<FloatingPointType> const& dvdx,
                   std::optional<std::vector<FloatingPointType>> const& dvdy,
+                  std::optional<std::vector<FloatingPointType>> const& /*dvdz*/,
+                  std::optional<std::vector<FloatingPointType>> const& /*dv2dx*/,
+                  std::optional<std::vector<FloatingPointType>> const& /*dv2dy*/,
+                  std::optional<std::vector<FloatingPointType>> const& /*dv2dz*/,
                   std::optional<std::vector<FloatingPointType>> const& /*dv3dx*/,
-                  std::vector<FloatingPointType>& out) -> std::vector<FloatingPointType>
+                  std::optional<std::vector<FloatingPointType>> const& /*dv3dy*/,
+                  std::optional<std::vector<FloatingPointType>> const& /*dv3dz*/,
+                  std::vector<FloatingPointType>& out) -> void
     {
       if (out.size() != 3) {
         out.resize(3);
@@ -247,12 +224,10 @@ public:
 
       const FloatingPointType g = m_modelParams.g;
 
-      // x-derivatives of state: [hx, qxx, qyx]
       const FloatingPointType hx = dvdx[0];
       const FloatingPointType qxx = dvdx[1];
       const FloatingPointType qyx = dvdx[2];
 
-      // y-derivatives of state: [hy, qxy, qyy]
       FloatingPointType hy = FloatingPointType(0);
       FloatingPointType qxy = FloatingPointType(0);
       FloatingPointType qyy = FloatingPointType(0);
@@ -267,48 +242,51 @@ public:
         out[0] = FloatingPointType(0);
         out[1] = FloatingPointType(0);
         out[2] = FloatingPointType(0);
-        return out;
+        return;
       }
 
-      // Continuity: (qx)_x + (qy)_y
       out[0] = qxx + qyy;
 
       const FloatingPointType invh = FloatingPointType(1) / h;
       const FloatingPointType invh2 = invh * invh;
 
-      // Momentum-x: d/dx(qx^2/h + g h^2/2) + d/dy(qx*qy/h)
-      const FloatingPointType dF2_x = -(qx * qx) * invh2 * hx + (FloatingPointType(2) * qx * invh) * qxx + (g * h) * hx;
-      const FloatingPointType dG2_y = -(qx * qy) * invh2 * hy + (qy * invh) * qxy + (qx * invh) * qyy;
+      const FloatingPointType dF2_x =
+        -(qx * qx) * invh2 * hx + (FloatingPointType(2) * qx * invh) * qxx + (g * h) * hx;
+      const FloatingPointType dG2_y =
+        -(qx * qy) * invh2 * hy + (qy * invh) * qxy + (qx * invh) * qyy;
 
       out[1] = dF2_x + dG2_y;
 
-      // Momentum-y: d/dx(qx*qy/h) + d/dy(qy^2/h + g h^2/2)
-      const FloatingPointType dF3_x = -(qx * qy) * invh2 * hx + (qy * invh) * qxx + (qx * invh) * qyx;
-      const FloatingPointType dG3_y = -(qy * qy) * invh2 * hy + (FloatingPointType(2) * qy * invh) * qyy + (g * h) * hy;
+      const FloatingPointType dF3_x =
+        -(qx * qy) * invh2 * hx + (qy * invh) * qxx + (qx * invh) * qyx;
+      const FloatingPointType dG3_y =
+        -(qy * qy) * invh2 * hy + (FloatingPointType(2) * qy * invh) * qyy + (g * h) * hy;
 
       out[2] = dF3_x + dG3_y;
 
-      (void)g;  // keeps “old” style; g used above, harmless if compiler warns in some configs
-      return out;
+      (void)g;
     };
 
     Base::SetLHSOp(lhsa, lhsb);
   }
 
-  // NOTE: This is kept exactly in the “old” style you pasted.
-  // Your JacRHS/JacLHSOp interfaces are vector-based, so if you need a full 3x3,
-  // handle row selection via 'field' in wrapper or pack/unpack convention.
   void SetJacLHSOp() override
   {
     auto jac_lhsa = [](std::vector<FloatingPointType> const& /*input*/,
                       std::vector<FloatingPointType> const& /*vdot*/,
                       std::vector<FloatingPointType> const& /*dvdx*/,
+                      std::optional<std::vector<FloatingPointType>> const& /*dvdy*/,
+                      std::optional<std::vector<FloatingPointType>> const& /*dvdz*/,
                       std::optional<std::vector<FloatingPointType>> const& /*dv2dx*/,
+                      std::optional<std::vector<FloatingPointType>> const& /*dv2dy*/,
+                      std::optional<std::vector<FloatingPointType>> const& /*dv2dz*/,
                       std::optional<std::vector<FloatingPointType>> const& /*dv3dx*/,
+                      std::optional<std::vector<FloatingPointType>> const& /*dv3dy*/,
+                      std::optional<std::vector<FloatingPointType>> const& /*dv3dz*/,
                       std::vector<FloatingPointType>& out,
                       int rowo,
                       int colo,
-                      int derivo) -> std::vector<FloatingPointType>
+                      int derivo) -> void
     {
       if (out.size() != 3) {
         out.assign(3, FloatingPointType(0));
@@ -319,18 +297,23 @@ public:
         out[1] = (rowo == 1 && colo == 1) ? FloatingPointType(1) : FloatingPointType(0);
         out[2] = (rowo == 2 && colo == 2) ? FloatingPointType(1) : FloatingPointType(0);
       }
-      return out;
     };
 
     auto jac_lhsb = [this](std::vector<FloatingPointType> const& input,
                       std::vector<FloatingPointType> const& /*vdot*/,
                       std::vector<FloatingPointType> const& /*dvdx*/,
+                      std::optional<std::vector<FloatingPointType>> const& /*dvdy*/,
+                      std::optional<std::vector<FloatingPointType>> const& /*dvdz*/,
                       std::optional<std::vector<FloatingPointType>> const& /*dv2dx*/,
+                      std::optional<std::vector<FloatingPointType>> const& /*dv2dy*/,
+                      std::optional<std::vector<FloatingPointType>> const& /*dv2dz*/,
                       std::optional<std::vector<FloatingPointType>> const& /*dv3dx*/,
+                      std::optional<std::vector<FloatingPointType>> const& /*dv3dy*/,
+                      std::optional<std::vector<FloatingPointType>> const& /*dv3dz*/,
                       std::vector<FloatingPointType>& out,
                       int rowo,
                       int colo,
-                      int derivo) -> std::vector<FloatingPointType>
+                      int derivo) -> void
     {
       if (out.size() != 3) {
         out.assign(3, FloatingPointType(0));
@@ -341,15 +324,13 @@ public:
       const FloatingPointType qy = input[2];
 
       if (h <= m_dryTol) {
-        return out;
+        return;
       }
 
       const FloatingPointType g = m_modelParams.g;
       const FloatingPointType invh = FloatingPointType(1) / h;
       const FloatingPointType invh2 = invh * invh;
 
-      // derivo==1: coefficients for x-derivatives [hx, qxx, qyx]
-      // derivo==2: coefficients for y-derivatives [hy, qxy, qyy]
       if (derivo == 1) {
         if (rowo == 0 && colo == 1) {
           out[0] = FloatingPointType(1);
@@ -395,8 +376,6 @@ public:
           out[2] = FloatingPointType(2) * qy * invh;
         }
       }
-
-      return out;
     };
 
     Base::SetJacLHSOp(jac_lhsa, jac_lhsb);
@@ -405,9 +384,7 @@ public:
   void SetJacRHS() override
   {
     Base::SetJacRHS(
-      [this](std::vector<FloatingPointType> const& input,
-        std::vector<FloatingPointType>& out,
-        int /*field*/) -> std::vector<FloatingPointType>
+      [this](std::vector<FloatingPointType> const& input, std::vector<FloatingPointType>& out, int /*field*/) -> void
       {
         if (out.size() != 3) {
           out.assign(3, FloatingPointType(0));
@@ -418,7 +395,7 @@ public:
         const FloatingPointType qy = input[2];
 
         if (h <= m_dryTol) {
-          return out;
+          return;
         }
 
         const FloatingPointType g = m_modelParams.g;
@@ -443,7 +420,6 @@ public:
           const FloatingPointType dFric2_dqx = dUsdU * dU_dqx;
           const FloatingPointType dFric2_dqy = dUsdV * dV_dqy;
 
-          // This returns derivatives for the x-momentum source row.
           out[0] = -g * m_dZs_dx - cf * dFric2_dh;
           out[1] = -cf * dFric2_dqx;
           out[2] = -cf * dFric2_dqy;
@@ -453,8 +429,6 @@ public:
           out[1] = FloatingPointType(0);
           out[2] = FloatingPointType(0);
         }
-
-        return out;
       });
   }
 
@@ -474,7 +448,6 @@ private:
   FloatingPointType m_rho {FloatingPointType(1.0)};
   FloatingPointType m_dZs_dx {FloatingPointType(0.0)};
   FloatingPointType m_dZs_dy {FloatingPointType(0.0)};
-
   FloatingPointType m_dryTol {FloatingPointType(1e-12)};
 };
 

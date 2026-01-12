@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "GetIndex.hpp"
-#include "Utils/IterTools.hpp"
+#include "utils/IterTools.hpp"
 
 namespace fcfd::pdenumerics
 {
