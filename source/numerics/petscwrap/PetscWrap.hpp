@@ -9,130 +9,93 @@
 
 #include <petsc.h>
 
-#include "PetscInitException.hpp"
 #include "PetscOptions.hpp"
 #include "PetscUtils.hpp"
 #include "numerics/SolTools.hpp"
 
 namespace fcfd::pdenumerics
 {
+
+/**
+ * @class PetscWrap
+ * @brief PETSc wrapper for solving PDE systems
+ *
+ * @details
+ *
+ * @tparam PDEOptions Type-specific PDE configuration options
+ */
 template<std::semiregular PDEOptions>
 class PetscWrap : public SolTool<PetscReal, PDEOptions, PetscErrorCode, PetscOptions, PetscSolveOpts>
 {
-  using BaseClass = SolTool<PetscReal, PDEOptions, PetscErrorCode, PetscOptions, PetscSolveOpts>;
+  using Base = SolTool<PetscReal, PDEOptions, PetscErrorCode, PetscOptions, PetscSolveOpts>;
 
 public:
-  ///
-  /// \brief Constructor
-  ///
-  /// Calls `PetscInitialize()` and sets RHS and I functions
-  /// \param[in] argc The number of command-line arguments passed in to the program
-  /// \param[in] argv A string containing a list of command-line arguments
-  /// \param[in] msg A help message string describing the possible options to set to modify the
-  /// program's behaviour
-  /// \throws PetscInitException on failure of PetscInitialize or the setting of RHS and I functions
-  ///
-  PetscWrap(int argc, char** argv, const char* msg)
+  /**
+   * @brief Construct and initialize a new PETSc session
+   *
+   * @details Calls PetscInitialize() to set up the PETSc runtime environment
+   * with the provided command-line arguments and help message.
+   *
+   * @param[in] argc The number of command-line arguments passed in to the program
+   * @param[in] argv An array of command-line argument strings
+   * @param[in] msg A help message describing the purpose of the program
+   *
+   * @throws PetscInitException if PetscInitialize fails
+   */
+  PetscWrap(int argc, char* argv[], const char* msg) noexcept(false)
+    : m_session(argc, argv, msg)
   {
-    if (IsPetscError(PetscInitialize(&argc, &argv, nullptr, msg))) {
-      throw PetscInitException();
+    if (IsPetscError(SetOptions())) [[unlikely]] {
+      throw PetscInitException("Could not set custom PETSc options");
     }
   }
 
-  ///
-  /// \brief Constructor
-  /// \param[in] argc The number of command-line arguments passed in to the program
-  /// \param[in] argv A string containing a list of the command-line arguments passed to the program
-  /// \param[in] msg A help message string describing the possible options to set to modify the
-  /// program's behaviour
-  /// \param[in] numFields The number of unknown fields in the PDE system
-  /// \throws PetscInitException on failure
-  ///
-  PetscWrap(int argc, char** argv, const char* msg, int numFields)
+  /**
+   * @brief Construct and initialize a new PETSc session
+   *
+   * @details Calls PetscInitialize() to set up the PETSc runtime environment
+   * with the provided command-line arguments and help message.
+   *
+   * @param[in] argc The number of command-line arguments passed in to the program
+   * @param[in] argv An array of command-line argument strings
+   * @param[in] msg A help message describing the purpose of the program
+   * @param[in] fields The unknown fields in the PDE system
+   *
+   * @throws PetscInitException if PetscInitialize fails
+   */
+  PetscWrap(int argc, char* argv[], const char* msg, std::vector<std::string> fields) noexcept(false)
     : PetscWrap(argc, argv, msg)
   {
-    m_methodProps.numFields = numFields;
-    BaseClass::SetInitFlag(0, FlagState::IsSet);
+    SetFields(std::move(fields));
+    Base::SetInitFlag(0, FlagState::IsSet);
   }
 
-  ///
-  /// \brief Constructor
-  /// \param[in] argc The number of command-line arguments passed to the program
-  /// \param[in] argv A string containing a list of the command-line arguments passed to the program
-  /// \param[in] msg A help message string describing the possible options to set to modify the
-  /// program's behaviour
-  /// \param[in] tsType A string with the name of a PETSc TS method (the time/ODE integrators that
-  /// PETSc provides)
-  /// \param[in] numFields The number of unknown fields in the PDE system
-  /// \throws PetscInitException on failure
-  ///
-  PetscWrap(int argc, char** argv, const char* msg, TSType const tsType, int const numFields)
-    : PetscWrap(argc, argv, msg)
-  {
-    m_methodProps.numFields = numFields;
-    m_methodProps.tsType = tsType;
-    BaseClass::SetInitFlag(0, FlagState::IsSet);
-  }
-
-  ///
-  /// \brief Constructor
-  /// \param[in] argc The number of command-line arguments passed to the program
-  /// \param[in] argv A string containing a list of the command-line arguments passed to the program
-  /// \param[in] msg A help message string describing the possible options to set to modify the
-  /// program's behaviour
-  /// \param[in] tsType A string with the name of a PETSc TS method (the time/ODE integrators that
-  /// PETSc provides)
-  /// \param[in] fieldNames The names of the unknown fields in the PDE system
-  /// \throws PetscInitException on failure
-  ///
-  PetscWrap(int argc, char** argv, const char* msg, TSType const tsType, std::vector<std::string> fieldNames)
-    : PetscWrap(argc, argv, msg)
+  /**
+   * @brief Construct and initialize a new PETSc session
+   *
+   * @details Calls PetscInitialize() to set up the PETSc runtime environment with the provided command-line arguments
+   * and help message
+   *
+   * @param[in] argc The number of command-line arguments passed to the program
+   * @param[in] argv An array of command-line argument strings
+   * @param[in] msg A help message describing the purpose of the program
+   * @param[in] tsType A string with the name of a PETSc TS method (the time/ODE integrators that
+   * PETSc provides)
+   * @param[in] fields The unknown fields in the PDE system
+   *
+   * @throws PetscInitException if PetscInitialize fails
+   */
+  PetscWrap(int argc, char* argv[], const char* msg, TSType const tsType, std::vector<std::string> fields)
+    noexcept(false)
+    : PetscWrap(argc, argv, msg, fields)
   {
     m_methodProps.tsType = tsType;
-    SetFields(std::move(fieldNames));
-    BaseClass::SetInitFlag(0, FlagState::IsSet);
+    Base::SetInitFlag(0, FlagState::IsSet);
   }
 
-  ///
-  /// \brief Constructor
-  /// \param[in] argc The number of command-line arguments passed to the program
-  /// \param[in] argv A string containing a list of the command-line arguments passed to the program
-  /// \param[in] msg A help message string describing the possible options to set to modify the
-  /// program's behaviour
-  /// \param[in] fieldNames The names of the unknown fields in the PDE system
-  /// \throws PetscInitException on failure
-  ///
-  PetscWrap(int argc, char** argv, const char* msg, std::vector<std::string> fieldNames)
-    : PetscWrap(argc, argv, msg)
-  {
-    SetFields(std::move(fieldNames));
-    BaseClass::SetInitFlag(0, FlagState::IsSet);
-  }
-
-  ///
-  /// \brief Copy constructor
-  ///
-  PetscWrap(PetscWrap const&) = default;
-
-  ///
-  /// \brief Copy-assignment operator
-  ///
-  auto operator=(PetscWrap const&) -> PetscWrap& = default;
-
-  ///
-  /// \brief Move constructor
-  ///
-  PetscWrap(PetscWrap&&) noexcept = default;
-
-  ///
-  /// \brief Move-assignment operator
-  ///
-  auto operator=(PetscWrap&&) noexcept -> PetscWrap& = default;
-
-  ///
-  /// \brief Destructor
-  /// \details Calls PetscFinalize()
-  ///
+  /**
+   * @brief Destructor
+   */
   ~PetscWrap()
   {
     if (m_vec != nullptr) {
@@ -144,201 +107,160 @@ public:
     if (m_da != nullptr) {
       DMDestroy(&m_da);
     }
-
-    PetscFinalize();
   }
 
-  ///
-  /// \brief Write the names of the unknown fields in the PDE system to our DMDA instance
-  /// \param[in] fieldNames The names of the unknown fields in the PDE system
-  /// \returns A PetscErrorCode instance on success or failure
-  ///
+  /**
+   * @brief Write the names of the unknown fields in the PDE system to our DMDA instance
+   *
+   * @param[in] fieldNames The names of the unknown fields in the PDE system
+   * @returns A PetscErrorCode instance on success or failure
+   */
   auto SetFields(std::vector<std::string>&& fieldNames) -> PetscErrorCode
   {
     m_methodProps.fields = std::move(fieldNames);
     m_methodProps.numFields = std::size(m_methodProps.fields);
-
-    return SetFields();
+    return WriteFieldNamesToDM();
   }
 
-  ///
-  /// \brief Set the solution options (an instance of PetscSolveOpts) to be used
-  /// This function is currently no-op because
-  /// \returns PetscErrorCode indicating success or failure
-  ///
+  /**
+   * @brief Set the solution options (an instance of PetscSolveOpts) to be used
+   *
+   * @returns PetscErrorCode indicating success or failure
+   */
   auto InitSolMethod() -> PetscErrorCode override
   {
     return 0;
   }
 
-  ///
-  /// \brief Set the PetscOptions for this current instance of PetscWrap
-  /// \param options The options to be set
-  ///
+  /**
+   * @brief Set the PetscOptions for this current instance of PetscWrap
+   * @param options The options to be set
+   */
   void InitSolMethod(PetscOptions options)
   {
     m_methodProps = std::move(options);
-    BaseClass::SetInitFlag(0, FlagState::IsSet);
+    Base::SetInitFlag(0, FlagState::IsSet);
   }
 
-  ///
-  /// \brief Creates a DMDA instance depending on the number of dimensions we're working with
-  ///
-  void SetGrid()
+  /**
+   * @brief Creates a DMDA instance depending on the number of dimensions we're working with
+   * @param[in] ndim The number of dimensions
+   * @param[in] bdryConds The boundary type
+   * @param[in] stendata Stencil data (i.e., global dimensions in x,y,z directions; degrees of freedom per node,
+   * stencil width)
+   * @returns A PetscErrorCode detailing success or failure
+   */
+  auto CreateGrid(int ndim, DMBoundaryType const bdryType, StencilData stendata) -> PetscErrorCode
   {
-  }
+    assert(bdryType == DM_BOUNDARY_GHOSTED or bdryType == DM_BOUNDARY_PERIODIC and "Unsupported boundary type");
+    assert(ndim >= 1 and ndim <= 3 and "Unsupported number of dimensions");
+    assert(stendata.dof > 0 and "Degree of freedom must be a positive value");
+    assert(stendata.stencilWidth >= 1 and "Stencil width must be greater than or equal to 1");
 
-  ///
-  /// \brief Creates a DMDA instance depending on the number of dimensions we're working with
-  /// \param[in] ndim The number of dimensions
-  /// \param[in] bdryConds The boundary conditions
-  /// \param[in] stendata Stencil data (i.e., global dimensions in x,y,z directions; degrees of freedom per node,
-  /// stencil width)
-  /// \param[in] stengrid Stencil grid for first-order derivatives
-  /// \param[in] stengridd Stencil grid for second-order derivatives
-  /// \param[in] stengridd3 Stencil grid for third-order derivatives
-  /// \returns A PetscErrorCode detailing success or failure
-  ///
-  auto SetGrid(int ndim,
-    std::array<DMBoundaryType, 3> const& bdryConds,
-    std::vector<PetscInt> stendata,
-    std::optional<std::vector<PetscReal>> stengrid,
-    std::optional<std::vector<PetscReal>> stengridd,
-    std::optional<std::vector<PetscReal>> stengridd3) -> PetscErrorCode
-  {
-    assert(!stendata.empty() and "stendata container cannot be empty");
-    assert(std::for_each(bdryConds.begin(),
-             bdryConds.end(),
-             [](DMBoundaryType const type) { type == DM_BOUNDARY_GHOSTED or type == DM_BOUNDARY_PERIODIC; })
-      and "Unsupported boundary type");
-
-    BaseClass::m_nd = ndim;
-
-    if (stengrid.has_value()) {
-      m_myStencilGridd = std::move(stengrid);
-    }
-
-    if (stengridd.has_value()) {
-      m_myStencilGridd = std::move(stengridd);
-    }
-
-    if (stengridd3.has_value()) {
-      m_myStencilGridd = std::move(stengridd3);
-    }
-
-    m_inTmp = std::vector<PetscReal>(stendata[1], 0.0);
-    m_outTmp = std::vector<PetscReal>(stendata[1], 0.0);
+    Base::m_nd = ndim;
 
     if (ndim == 1) {
-      Create1dStencilGrid(m_da, stendata, bdryConds[0]);
+      Create1dStencilGrid(m_da, stendata, bdryType);
     }
     else if (ndim == 2) {
-      Create2dStencilGrid(m_da, stendata, bdryConds[1]);
+      Create2dStencilGrid(m_da, stendata, bdryType);
     }
     else if (ndim == 3) {
-      Create3dStencilGrid(m_da, stendata, bdryConds[2]);
+      Create3dStencilGrid(m_da, stendata, bdryType);
     }
 
     m_myStencilData = std::move(stendata);
     PetscCall(DMSetFromOptions(m_da));
     PetscCall(DMSetUp(m_da));
 
-    BaseClass::SetInitFlag(2, FlagState::IsSet);
+    Base::SetInitFlag(2, FlagState::IsSet);
 
     return 0;
   }
 
-  ///
-  /// \brief Set the four local residual evaluation functions for use with the DMDA
-  /// \returns A PetscErrorCode indicating success or failure
-  ///
-  auto MakeProbFuns() -> PetscErrorCode
+  /**
+   * @brief Set the stencil grid weights to be used during computation
+   *
+   * @param[in] stengrid The stencil grid weights for first-order derivatives
+   * @param[in] stengridd The stencil grid weights for second-order derivatives
+   * @param[in] stengridd3 The stencil grid weights for third-order derivatives
+   */
+  void SetStencilGridWeights(std::vector<PetscReal> stengrid,
+    std::optional<std::vector<PetscReal>> stengridd,
+    std::optional<std::vector<PetscReal>> stengridd3)
   {
-    assert(m_da != nullptr and "m_da is in an invalid state and must be initialized before use");
+    assert(!stengrid.empty() and "This should always have values");
 
-    if (BaseClass::m_nd == 1) {
-      PetscCall(DMDATSSetRHSFunctionLocal(m_da, INSERT_VALUES, (DMDATSRHSFunctionLocal)FormRHSFunctionLocal1d, this));
-      PetscCall(DMDATSSetRHSJacobianLocal(m_da, (DMDATSRHSJacobianLocal)FormRHSJacobianLocal1d, this));
-      PetscCall(DMDATSSetIFunctionLocal(m_da, INSERT_VALUES, (DMDATSIFunctionLocal)FormIFunctionLocal1d, this));
-      PetscCall(DMDATSSetIJacobianLocal(m_da, (DMDATSIJacobianLocal)FormIJacobianLocal1d, this));
-    }
-    else if (BaseClass::m_nd == 2) {
-      PetscCall(DMDATSSetRHSFunctionLocal(m_da, INSERT_VALUES, (DMDATSRHSFunctionLocal)FormRHSFunctionLocal2d, this));
-      PetscCall(DMDATSSetRHSJacobianLocal(m_da, (DMDATSRHSJacobianLocal)FormRHSJacobianLocal2d, this));
-      PetscCall(DMDATSSetIFunctionLocal(m_da, INSERT_VALUES, (DMDATSIFunctionLocal)FormIFunctionLocal2d, this));
-      PetscCall(DMDATSSetIJacobianLocal(m_da, (DMDATSIJacobianLocal)FormIJacobianLocal2d, this));
-    }
-    else if (BaseClass::m_nd == 3) {
-      PetscCall(DMDATSSetRHSFunctionLocal(m_da, INSERT_VALUES, (DMDATSRHSFunctionLocal)FormRHSFunctionLocal3d, this));
-      PetscCall(DMDATSSetRHSJacobianLocal(m_da, (DMDATSRHSJacobianLocal)FormRHSJacobianLocal3d, this));
-      PetscCall(DMDATSSetIFunctionLocal(m_da, INSERT_VALUES, (DMDATSIFunctionLocal)FormIFunctionLocal3d, this));
-      PetscCall(DMDATSSetIJacobianLocal(m_da, (DMDATSIJacobianLocal)FormIJacobianLocal3d, this));
+    m_myStencilGridd = std::move(stengrid);
+
+    if (stengridd.has_value()) {
+      m_myStencilGridd2 = std::move(stengridd);
     }
 
-    return 0;
+    if (stengridd3.has_value()) {
+      m_myStencilGridd3 = std::move(stengridd3);
+    }
   }
 
+  /**
+   * @brief Set the four local residual evaluation functions for use with the DMDA
+   *
+   * @return A PetscErrorCode indicating success or failure
+   */
+  auto MakeProbFuns() -> PetscErrorCode;
+
+  /**
+   * @brief Configure the TS solver with algorithm options
+   *
+   * @details Sets up the PETSc time stepping (TS_=) object with the current algorithm options stored in m_algOpts. This
+   * includes configuring the TS type, initial time, maximum time, time step size, and final time handling behaviour.
+   * Additionally, it processes any command-line options that override or supplement these settings.
+   *
+   * @returns PetscErrorCode indicating success (PETSC_SUCCESS) or failure
+   * @pre m_myTS must be initialized (not nullptr)
+   * @note This method is called automatically when SetSolOpts(PetscSolveOpts) is invoked
+   * @see SetSolOpts(PetscSolveOpts)
+   */
   auto SetSolOpts() -> PetscErrorCode override
   {
     assert(m_myTS != nullptr and "m_myTS is in an invalid state and must be initialized before use");
 
-    // if (BaseClass::GetInitFlag(3) == FlagState::IsSet) {
+    PetscFunctionBeginUser;
+
     PetscCall(TSSetType(m_myTS, m_algOpts.tsType));
     PetscCall(TSSetTime(m_myTS, m_algOpts.initTime));
     PetscCall(TSSetMaxTime(m_myTS, m_algOpts.maxTime));
     PetscCall(TSSetTimeStep(m_myTS, m_algOpts.timeStep));
     PetscCall(TSSetExactFinalTime(m_myTS, m_algOpts.finalTimeOption));
     PetscCall(TSSetFromOptions(m_myTS));
-    // }
 
-    return 0;
+    PetscFunctionReturn(PETSC_SUCCESS);
   }
 
-  ///
-  /// \brief Set solution options
-  /// \param[in] opts The solution options to be used
-  //
-  void SetSolOpts(PetscSolveOpts opts) override
+  /**
+   * @brief Configure the TS solver with algorithm options
+   *
+   * @details Sets up the PETSc time-stepping object with the algorithm options stored in opts. This includes
+   * configuring the TSType, initial time, maximum time, time-step size, and final time handling behaviour.
+   * Additionally, it processes any command-line options that override or supplement these settings.
+   *
+   * @param[in] opts The algorithm options the TS solver should use
+   *
+   */
+  void SetSolOpts(PetscSolveOpts opts) noexcept override
   {
-    BaseClass::SetSolOpts(opts);
+    m_algOpts = std::move(opts);
     SetSolOpts();
   }
 
-  ///
-  /// \brief Set the TS scheme to be used
-  /// \param[in] tsScheme The TS scheme to set
-  ///
-  void SetTSScheme(TS tsScheme)
-  {
-    m_myTS = tsScheme;
-  }
-
-  ///
-  /// \brief Set the initial state of the PDE system
-  /// \param[in] distributedMesh The DM object
-  /// \param[in] vec The Vec object
-  /// \param[in] info The DMDALocalInfo object
-  /// \returns A PetscErrorCode indicating success or failure
-  ///
-  auto InitialState(DM& distributedMesh, Vec& vec, DMDALocalInfo& info) -> PetscErrorCode
-  {
-    assert(BaseClass::m_myPDE != nullptr && "PDE has not been set");
-
-    PetscFunctionBeginUser;
-
-    auto initFunc = [this](std::vector<PetscReal> const& coords) -> std::vector<PetscReal>
-    { return this->BaseClass::m_myPDE->InitCond(coords); };
-
-    return SetInitialState(distributedMesh, vec, info, initFunc);
-  }
-
-  ///
-  /// \brief Initialize the timestepper
-  /// \returns A PetscErrorCode indicating success or failure
-  ///
+  /**
+   * @brief Initialize the timestepper
+   *
+   * @returns A PetscErrorCode indicating success or failure
+   */
   auto InitializeTS() -> PetscErrorCode
   {
-    assert(m_da and "The DM object is in an invalid state. SetGrid() must be called before InitializeTS()");
+    assert(m_da and "The DM object is in an invalid state. CreateGrid() must be called before InitializeTS()");
 
     PetscFunctionBeginUser;
 
@@ -350,11 +272,13 @@ public:
     PetscFunctionReturn(PETSC_SUCCESS);
   }
 
-  ///
-  /// \brief
-  /// \param[in] dmPtr The DM object
-  /// \param[in] vec A vector the same size as one obtained with DMCreateGlobalVector or DMCreateLocalVector
-  /// \returns PetscErrorCode indicating success or failure
+  /**
+   * @brief Numerically solve the PDE
+   *
+   * @param[in] dmPtr The DM object
+   * @param[in] vec A vector the same size as one obtained with DMCreateGlobalVector or DMCreateLocalVector
+   * @returns PetscErrorCode indicating success or failure
+   */
   auto NumericalSolve() -> PetscErrorCode override
   {
     assert(m_da and "The DM object is in an invalid state and must be initialized before use");
@@ -369,26 +293,30 @@ public:
     PetscCall(InitialState(m_da, m_vec, m_info));
     PetscCall(TSSolve(m_myTS, m_vec));
 
+    if (m_callbackReport) {
+      PetscCall(PrintCallbackReports());
+    }
+
     PetscFunctionReturn(PETSC_SUCCESS);
   }
 
-  ///
-  /// \brief Calls a function on values of fields of a PDE and stores the evaluated result
-  ///
-  /// \details
-  /// This function evaluates the solution stored in the global vector at each local grid
-  /// point owned by the current MPI rank. The evaluation is performed by calling the
-  /// dimension-specific free functions EvaluateSolution1d/2d/3d, which iterate over the
-  /// DMDA local domain.
-  ///
-  /// The values returned by the user-provided function are stored in m_evalValues in the
-  /// same order as the grid traversal. The corresponding grid indices (i,j,k) are stored
-  /// in m_evalIJK. No assumptions are made about primitive variables; the stored values
-  /// correspond directly to the conservative degrees of freedom defined by the PDE.
-  ///
-  /// \param[in] interpol The function used to evaluate the fields of a PDE at a grid point
-  /// \returns PetscErrorCode indicating success or failure
-  ///
+  /**
+   * @brief Calls a function on values of fields of a PDE and stores the evaluated result
+   *
+   * @details
+   * This function evaluates the solution stored in the global vector at each local grid
+   * point owned by the current MPI rank. The evaluation is performed by calling the
+   * dimension-specific free functions EvaluateSolution1d/2d/3d, which iterate over the
+   * DMDA local domain.
+   *
+   * The values returned by the user-provided function are stored in m_evalValues in the
+   * same order as the grid traversal. The corresponding grid indices (i,j,k) are stored
+   * in m_evalIJK. No assumptions are made about primitive variables; the stored values
+   * correspond directly to the conservative degrees of freedom defined by the PDE.
+   *
+   * @param[in] interpol The function used to evaluate the fields of a PDE at a grid point
+   * @returns PetscErrorCode indicating success or failure
+   */
   auto EvaluateSolution(std::function<std::vector<double>(std::vector<PetscReal>&)> const& interpol)
     -> PetscErrorCode override
   {
@@ -465,10 +393,17 @@ public:
     PetscFunctionReturn(ierr);
   }
 
+  PetscWrap(PetscWrap const&) = delete;
+  auto operator=(PetscWrap const&) -> PetscWrap& = delete;
+  PetscWrap(PetscWrap&&) noexcept = delete;
+  auto operator=(PetscWrap&&) noexcept -> PetscWrap& = delete;
+
 private:
+  PetscSession m_session;
+
   PetscOptions m_methodProps {};
   PetscSolveOpts m_algOpts {};
-  CallBacks m_user {.iFuncCalled = PETSC_FALSE,
+  CallbackReports m_user {.iFuncCalled = PETSC_FALSE,
     .iJacobianCalled = PETSC_FALSE,
     .rhsFuncCalled = PETSC_FALSE,
     .rhsJacobianCalled = PETSC_FALSE};
@@ -478,15 +413,15 @@ private:
   DM m_da {};
   DMDALocalInfo m_info {};
   Vec m_vec {};
-  PetscBool m_noRhsJacobian {PETSC_FALSE};
-  PetscBool m_noIJacobian {PETSC_FALSE};
+  PetscBool m_useRhsJacobian {PETSC_TRUE};
+  PetscBool m_useIJacobian {PETSC_TRUE};
   PetscBool m_callbackReport {PETSC_TRUE};
 
   //! This stores our stencil data (i.e., the global dimensions in x, y, and z directions, degrees of freedom per node,
   //! stencil width)
-  std::vector<PetscInt> m_myStencilData {};
+  StencilData m_myStencilData {};
 
-  std::optional<std::vector<PetscReal>> m_myStencilGridd {};
+  std::vector<PetscReal> m_myStencilGridd {};
   std::optional<std::vector<PetscReal>> m_myStencilGridd2 {};
   std::optional<std::vector<PetscReal>> m_myStencilGridd3 {};
 
@@ -496,100 +431,188 @@ private:
   //! Stores the corresponding (i,j,k) indices (local portion on this rank)
   std::vector<std::array<PetscInt, 3>> m_evalIJK {};
 
-  std::vector<PetscReal> m_inTmp {};
-
-  //! First-order spatial derivative in x-direction
-  std::vector<PetscReal> m_indx {};
-
-  //! Second-order spatial derivatives in x-direction
-  std::optional<std::vector<PetscReal>> m_ind2x {};
-
-  //! Third order spatial derivative in x-direction
-  std::optional<std::vector<PetscReal>> m_ind3x {};
-
-  //! First-order spatial derivative in y-direction
-  std::vector<PetscReal> m_indy {};
-
-  //! Second-order spatial derivative in y-direction
-  std::optional<std::vector<PetscReal>> m_ind2y {};
-
-  //! Third-order spatial derivative in y-direction
-  std::optional<std::vector<PetscReal>> m_ind3y {};
-
-  //! First-order spatial derivative in z-direction
-  std::vector<PetscReal> m_indz {};
-
-  //! Second-order spatial derivative in z-direction
-  std::optional<std::vector<PetscReal>> m_ind2z {};
-
-  //! Third-order spatial derivative in z-direction
-  std::optional<std::vector<PetscReal>> m_ind3z {};
-
-  //! This stores the third-order spatial derivatives
-  //! Optional because these derivatives may not exist depending on the PDE we're trying to solve
-  std::optional<std::vector<PetscReal>> m_ind3Tmp {};
-
-  //! This is used to store the computed time derivatives
-  std::vector<PetscReal> m_dTime {};
-
-  std::vector<PetscReal> m_outTmp {};
-  std::vector<PetscReal> m_outdTmp {};
-  std::optional<std::vector<PetscReal>> m_outd2Tmp {};
-  std::optional<std::vector<PetscReal>> m_outd3Tmp {};
-
-  std::vector<PetscReal> m_vTmp {};
-  std::vector<PetscReal> m_vTmpTmp {};
-  std::vector<PetscReal> m_vdTmp {};
-  std::optional<std::vector<PetscReal>> m_vd2Tmp {};
-  std::optional<std::vector<PetscReal>> m_vd3Tmp {};
-
-  std::vector<MatStencil> m_colTmp {};
-  std::vector<MatStencil> m_coldTmp {};
-  std::optional<std::vector<MatStencil>> m_cold2Tmp {};
-  std::optional<std::vector<MatStencil>> m_cold3Tmp {};
-
-  //!
-  MatStencil m_rowTmp {};
-  MatStencil m_rowdTmp {};
-  std::optional<MatStencil> m_rowd2Tmp {};
-  std::optional<MatStencil> m_rowd3Tmp {};
-
-  ///
-  /// \brief Set field names for the DMDA instance
-  ///
-  auto SetFields() -> PetscErrorCode
+  /**
+   * @brief Dynamically set user options at runtime
+   *
+   * @returns PetscErrorCode indicating success or failure
+   */
+  auto SetOptions() -> PetscErrorCode
   {
-    assert(m_da and "The DM object is in an invalid state. SetGrid() must be called before SetFields()");
-
     PetscFunctionBeginUser;
 
-    for (PetscInt i = 0; auto const& field : m_methodProps.fields) {
-      PetscCall(DMDASetFieldName(m_da, i, field.c_str()));
-      ++i;
-    }
+    PetscOptionsBegin(PETSC_COMM_WORLD, "ptn_", "Options for patterns", "");
 
-    BaseClass::SetInitFlag(0, FlagState::IsSet);
+    PetscCall(PetscOptionsBool("-callback_report",
+      "Report on which user-supplied callbacks were actually called",
+      "",
+      m_callbackReport,
+      &m_callbackReport,
+      nullptr));
+    PetscCall(PetscOptionsBool(
+      "-use_ijacobian", "Set callback DMDATSSetIJacobian()", "", m_useIJacobian, &m_useIJacobian, nullptr));
+    PetscCall(PetscOptionsBool(
+      "-use_rhsjacobian", "Set callback DMDATSSetRHSJacobian()", "", m_useRhsJacobian, &m_useRhsJacobian, nullptr));
+
+    PetscOptionsEnd();
 
     PetscFunctionReturn(PETSC_SUCCESS);
   }
 
+  auto PrintCallbackReports() -> PetscErrorCode
+  {
+    PetscFunctionBeginUser;
+
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Callback Report\nSolver Type: %s\n", m_algOpts.tsType));
+    PetscCall(PetscPrintf(
+      PETSC_COMM_WORLD, "  IFunction: %d  |  IJacobian:  %d\n", m_user.iFuncCalled, m_user.iJacobianCalled));
+    PetscCall(PetscPrintf(
+      PETSC_COMM_WORLD, "  RHSFunction: %d  |  RHSJacobian: %d\n", m_user.rhsFuncCalled, m_user.rhsJacobianCalled));
+
+    PetscFunctionReturn(PETSC_SUCCESS);
+  }
+
+  /**
+   * @brief Write the names of fields to our DMDA instance
+   *
+   * @returns A PetscErrorCode indicating success or failure
+   * @pre The DM object must be initialized and in a valid state
+   */
+  auto WriteFieldNamesToDM() -> PetscErrorCode;
+
+  /**
+   * @brief Set the four local residual evaluation functions for use with the DMDA
+   *
+   * @returns A PetscErrorCode indicating success or failure
+   */
+  auto MakeProblemFunctions1d() -> PetscErrorCode;
+
+  /**
+   * @brief Set the four local residual evaluation functions for use with the DMDA
+   *
+   * @returns A PetscErrorCode indicating success or failure
+   */
+  auto MakeProblemFunctions2d() -> PetscErrorCode;
+
+  /**
+   * @brief Set the four local residual evaluation functions for use with the DMDA
+   *
+   * @returns A PetscErrorCode indicating success or failure
+   */
+  auto MakeProblemFunctions3d() -> PetscErrorCode;
+
+  /**
+   * @brief Set the initial state of the PDE system
+   *
+   * @param[in] distributedMesh The DM object
+   * @param[in] vec The Vec object
+   * @param[in] info The DMDALocalInfo object
+   *
+   * @returns A PetscErrorCode indicating success or failure
+   */
+  auto InitialState(DM& distributedMesh, Vec& vec, DMDALocalInfo& info) -> PetscErrorCode;
+
+  /**
+   * @brief Computes the local right-hand side function for a 1D PDE system
+   *
+   * @param[in] info DMDALocalInfo structure containing grid dimensions and local indices for this
+   * processor's domain
+   * @param[in] time Current simulation time
+   * @param[in] aY Array of flow variables at the current time step
+   * @param[in] aG Array of computed time derivatives for flow variables
+   * @param[in] pwp A void pointer to an instance of PetscWrap (the context)
+   *
+   * @returns A PetscErrorCode indicating success or failure
+   */
   static auto FormRHSFunctionLocal1d(DMDALocalInfo* info, PetscReal time, PetscReal* aY, PetscReal* aG, void* pwp)
     -> PetscErrorCode;
 
+  /**
+   * @brief Computes the local right-hand side function for a 2D PDE system
+   *
+   * @param[in] info DMDALocalInfo structure containing grid dimensions and local indices for this
+   * processor's domain
+   * @param[in] time Current simulation time
+   * @param[in] aY Array of flow variables at the current time step
+   * @param[in] aG Array of computed time derivatives for flow variables
+   * @param[in] pwp A void pointer to an instance of PetscWrap (the context)
+   *
+   * @returns A PetscErrorCode indicating success or failure
+   */
   static auto FormRHSFunctionLocal2d(DMDALocalInfo* info, PetscReal time, PetscReal** aY, PetscReal** aG, void* pwp)
     -> PetscErrorCode;
 
+  /**
+   * @brief Computes the local right-hand side function for a 3D PDE system
+   *
+   * @param[in] info DMDALocalInfo structure containing grid dimensions and local indices for this
+   * processor's domain
+   * @param[in] time Current simulation time
+   * @param[in] aY Array of flow variables at the current time step
+   * @param[in] aG Array of computed time derivatives for flow variables
+   * @param[in] pwp A void pointer to an instance of PetscWrap (the context)
+   *
+   * @returns A PetscErrorCode indicating success or failure
+   */
   static auto FormRHSFunctionLocal3d(DMDALocalInfo* info, PetscReal time, PetscReal*** aY, PetscReal*** aG, void* pwp)
     -> PetscErrorCode;
 
-  // ENDRHSFUNCTION
-
+  /**
+   * @brief Computes the Jacobian of the right-hand side for a local DMDA domain partition of a 1D PDE system
+   *
+   * @details This function assembles the Jacobian matrix of the PDE system's right-hand side for a local
+   * sub-domain managed by PETSc's Distributed Array (DMDA). It iterates over grid points, evaluates the Jacobian at
+   * each point using the user-provided PetscWrap instance, and populates the PETSc matrix using stencil-based indexing.
+   *
+   * @param[in] info A pointer to DMDA local sub-domain information (grid indices and sizes)
+   * @param[in] time Current simulation time
+   * @param[in] aY An array containing the initial values of the unknown fields in the system
+   * @param[in] asmMat The Jacobian matrix to be assembled (for implicit solvers)
+   * @param[in] precondMat The material from which PETSc can build a preconditioner; typically the same as P
+   * but may differ
+   * @param[in] pwp A void pointer to an instance of PetscWrap (the context)
+   *
+   * @returns PetscErrorCode indicating success or failure
+   */
   static auto FormRHSJacobianLocal1d(
     DMDALocalInfo* info, PetscReal time, PetscReal* aY, Mat asmMat, Mat precondMat, void* pwp) -> PetscErrorCode;
 
+  /**
+   * @brief Computes the Jacobian of the right-hand side for a local DMDA domain partition of a 2D PDE system
+   *
+   * @details This function assembles the Jacobian matrix of the PDE system's right-hand side for a local
+   * sub-domain managed by PETSc's Distributed Array (DMDA). It iterates over grid points, evaluates the Jacobian at
+   * each point using the user-provided PetscWrap instance, and populates the PETSc matrix using stencil-based indexing.
+   *
+   * @param[in] info A pointer to DMDA local sub-domain information (grid indices and sizes)
+   * @param[in] time Current simulation time
+   * @param[in] aY An array containing the initial values of the unknown fields in the system
+   * @param[in] asmMat The Jacobian matrix to be assembled (for implicit solvers)
+   * @param[in] precondMat The material from which PETSc can build a preconditioner; typically the same as P
+   * but may differ
+   * @param[in] pwp A void pointer to an instance of PetscWrap (the context)
+   *
+   * @returns PetscErrorCode indicating success or failure
+   */
   static auto FormRHSJacobianLocal2d(
     DMDALocalInfo* info, PetscReal time, PetscReal** aY, Mat asmMat, Mat precondMat, void* pwp) -> PetscErrorCode;
 
+  /**
+   * @brief Computes the Jacobian of the right-hand side for a local DMDA domain partition of a 3D PDE system
+   *
+   * @details This function assembles the Jacobian matrix of the PDE system's right-hand side for a local
+   * sub-domain managed by PETSc's Distributed Array (DMDA). It iterates over grid points, evaluates the Jacobian at
+   * each point using the user-provided PetscWrap instance, and populates the PETSc matrix using stencil-based indexing.
+   *
+   * @param[in] info A pointer to DMDA local sub-domain information (grid indices and sizes)
+   * @param[in] time Current simulation time
+   * @param[in] aY An array containing the initial values of the unknown fields in the system
+   * @param[in] asmMat The Jacobian matrix to be assembled (for implicit solvers)
+   * @param[in] precondMat The material from which PETSc can build a preconditioner; typically the same as P
+   * but may differ
+   * @param[in] pwp A void pointer to an instance of PetscWrap (the context)
+   *
+   * @returns PetscErrorCode indicating success or failure
+   */
   static auto FormRHSJacobianLocal3d(
     DMDALocalInfo* info, PetscReal time, PetscReal*** aY, Mat asmMat, Mat precondMat, void* pwp) -> PetscErrorCode;
 
@@ -598,22 +621,76 @@ private:
   //     F^v(t,a,q,a_t,q_t) = q_t +  Dx[q^2/a+ga^2/2] = q_t + 2q Dx[q]/a-q^2/a^2
   //     Dx[a]+g a Dx[a]
   // STARTIFUNCTION
+
+  /**
+   * @brief Compute the local implicit function residuals for a 1D PDE system
+   *
+   * @param[in] info   DMDA local information structure containing grid indices and dimensions
+   * @param[in] time   Current time value
+   * @param[in] aY     Array of field variables
+   * @param[out] aYdot Array of time derivatives of field variables
+   * @param[in,out] aF Array to store computed residuals for the implicit function
+   * @param[in] pwp    A pointer to an instance of PetscWrap
+   *
+   * @returns PetscErrorCode indicating success or failure
+   */
   static auto FormIFunctionLocal1d(
     DMDALocalInfo* info, PetscReal time, PetscReal* aY, PetscReal* aYdot, PetscReal* aF, void* pwp) -> PetscErrorCode;
 
+  /**
+   * @brief Compute the local implicit function residuals for a 2D PDE system
+   *
+   * @param[in] info   DMDA local information structure containing grid indices and dimensions
+   * @param[in] time   Current time value
+   * @param[in] aY     Array of field variables
+   * @param[out] aYdot Array of time derivatives of field variables
+   * @param[in,out] aF Array to store computed residuals for the implicit function
+   * @param[in] pwp    A pointer to an instance of PetscWrap
+   *
+   * @returns PetscErrorCode indicating success or failure
+   */
   static auto FormIFunctionLocal2d(
     DMDALocalInfo* info, PetscReal time, PetscReal** aY, PetscReal** aYdot, PetscReal** aF, void* pwp)
     -> PetscErrorCode;
 
+  /**
+   * @brief Compute the local implicit function residuals for a 3D PDE system
+   *
+   * @param[in] info   DMDA local information structure containing grid indices and dimensions
+   * @param[in] time   Current time value
+   * @param[in] aY     Array of field variables
+   * @param[out] aYdot Array of time derivatives of field variables
+   * @param[in,out] aF Array to store computed residuals for the implicit function
+   * @param[in] pwp    A pointer to an instance of PetscWrap
+   *
+   * @returns PetscErrorCode indicating success or failure
+   */
   static auto FormIFunctionLocal3d(
     DMDALocalInfo* info, PetscReal time, PetscReal*** aY, PetscReal*** aYdot, PetscReal*** aF, void* pwp)
     -> PetscErrorCode;
-  // ENDIFUNCTION
 
   // in system form  F(t,Y,dot Y) = G(t,Y),  compute combined/shifted
   // Jacobian of F():
   //     J = (shift) dF/d(dot Y) + dF/dY
   // STARTIJACOBIAN
+
+  /**
+   * @brief Computes the Jacobian matrix for the implicit function of a 1D PDE system
+   *
+   * @param[in] info  A pointer to DMDA local sub-domain information (grid indices and sizes)
+   * @param[in] time  Current simulation time
+   * @param[in] aY    An array containing the initial values of the unknown fields in the system at
+   * all grid points in the local sub-domain
+   * @param[in] aYdot Array of time derivatives at all grid points
+   * @param[in] shift Shift parameter (typically dt/theta) for implicit time integration; multiplies
+   * the Ẏ contribution to the domain
+   * @param[in] asmMat The Jacobian matrix to be assembled (for implicit solvers)
+   * @param[in] precondMat The material from which PETSc can build a preconditioner matrix; typically the
+   * same as P but may differ; filled with stencil values representing spatial discretization
+   * @param[in] pwp   A void pointer to an instance of PetscWrap (the context)
+   *
+   * @returns PetscErrorCode indicating success or failure
+   */
   static auto FormIJacobianLocal1d(DMDALocalInfo* info,
     PetscReal time,
     PetscReal* aY,
@@ -623,6 +700,23 @@ private:
     Mat precondMat,
     void* pwp) -> PetscErrorCode;
 
+  /**
+   * @brief Computes the Jacobian matrix for the implicit function of a 2D PDE system
+   *
+   * @param[in] info  A pointer to DMDA local sub-domain information (grid indices and sizes)
+   * @param[in] time  Current simulation time
+   * @param[in] aY    An array containing the initial values of the unknown fields in the system at
+   * all grid points in the local sub-domain
+   * @param[in] aYdot Array of time derivatives at all grid points
+   * @param[in] shift Shift parameter (typically dt/theta) for implicit time integration; multiplies
+   * the Ẏ contribution to the domain
+   * @param[in] asmMat The Jacobian matrix to be assembled (for implicit solvers)
+   * @param[in] precondMat The material from which PETSc can build a preconditioner matrix; typically the
+   * same as P but may differ; filled with stencil values representing spatial discretization
+   * @param[in] pwp   A void pointer to an instance of PetscWrap (the context)
+   *
+   * @returns PetscErrorCode indicating success or failure
+   */
   static auto FormIJacobianLocal2d(DMDALocalInfo* info,
     PetscReal time,
     PetscReal** aY,
@@ -632,6 +726,23 @@ private:
     Mat precondMat,
     void* pwp) -> PetscErrorCode;
 
+  /**
+   * @brief Computes the Jacobian matrix for the implicit function of a 3D PDE system
+   *
+   * @param[in] info  A pointer to DMDA local sub-domain information (grid indices and sizes)
+   * @param[in] time  Current simulation time
+   * @param[in] aY    An array containing the initial values of the unknown fields in the system at
+   * all grid points in the local sub-domain
+   * @param[in] aYdot Array of time derivatives at all grid points
+   * @param[in] shift Shift parameter (typically dt/theta) for implicit time integration; multiplies
+   * the Ẏ contribution to the domain
+   * @param[in] asmMat The Jacobian matrix to be assembled (for implicit solvers)
+   * @param[in] precondMat The material from which PETSc can build a preconditioner matrix; typically the
+   * same as P but may differ; filled with stencil values representing spatial discretization
+   * @param[in] pwp   A void pointer to an instance of PetscWrap (the context)
+   *
+   * @returns PetscErrorCode indicating success or failure
+   */
   static auto FormIJacobianLocal3d(DMDALocalInfo* info,
     PetscReal time,
     PetscReal*** aY,
@@ -642,223 +753,190 @@ private:
     void* pwp) -> PetscErrorCode;
 };
 
-///
-/// \brief Computes the local right-hand side function for the shallow water equations
-///
-/// \param[in] info DMDALocalInfo structure containing grid dimensions and local indices for this
-/// processor's domain
-/// \param[in] time Current simulation time
-/// \param[in] aY Array of flow variables at the current time step
-/// \param[in] aG Array of computed time derivatives for flow variables
-/// \param[in] pwp A void pointer to an instance of PetscWrap (the context)
-/// \returns
-///
+template<std::semiregular PDEOptions>
+auto PetscWrap<PDEOptions>::WriteFieldNamesToDM() -> PetscErrorCode
+{
+  assert(m_da and "The DM object is in an invalid state. CreateGrid() must be called before SetFields()");
+
+  PetscFunctionBeginUser;
+
+  for (PetscInt i = 0; auto const& field : m_methodProps.fields) {
+    PetscCall(DMDASetFieldName(m_da, i, field.c_str()));
+    ++i;
+  }
+
+  Base::SetInitFlag(0, FlagState::IsSet);
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+template<std::semiregular PDEOptions>
+auto PetscWrap<PDEOptions>::MakeProbFuns() -> PetscErrorCode
+{
+  assert(m_da != nullptr and "m_da is in an invalid state and must be initialized before use");
+
+  PetscFunctionBeginUser;
+
+  if (Base::m_nd == 1) {
+    return MakeProblemFunctions1d();
+  }
+  else if (Base::m_nd == 2) {
+    return MakeProblemFunctions2d();
+  }
+  else if (Base::m_nd == 3) {
+    return MakeProblemFunctions3d();
+  }
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+template<std::semiregular PDEOptions>
+auto PetscWrap<PDEOptions>::MakeProblemFunctions1d() -> PetscErrorCode
+{
+  PetscFunctionBeginUser;
+
+  PetscCall(DMDATSSetRHSFunctionLocal(m_da, INSERT_VALUES, (DMDATSRHSFunctionLocal)FormRHSFunctionLocal1d, this));
+  PetscCall(DMDATSSetIFunctionLocal(m_da, INSERT_VALUES, (DMDATSIFunctionLocal)FormIFunctionLocal1d, this));
+
+  if (m_useRhsJacobian) {
+    PetscCall(DMDATSSetRHSJacobianLocal(m_da, (DMDATSRHSJacobianLocal)FormRHSJacobianLocal1d, this));
+  }
+
+  if (m_useIJacobian) {
+    PetscCall(DMDATSSetIJacobianLocal(m_da, (DMDATSIJacobianLocal)FormIJacobianLocal1d, this));
+  }
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+template<std::semiregular PDEOptions>
+auto PetscWrap<PDEOptions>::MakeProblemFunctions2d() -> PetscErrorCode
+{
+  PetscFunctionBeginUser;
+
+  PetscCall(DMDATSSetRHSFunctionLocal(m_da, INSERT_VALUES, (DMDATSRHSFunctionLocal)FormRHSFunctionLocal2d, this));
+  PetscCall(DMDATSSetIFunctionLocal(m_da, INSERT_VALUES, (DMDATSIFunctionLocal)FormIFunctionLocal2d, this));
+
+  if (m_useRhsJacobian) {
+    PetscCall(DMDATSSetRHSJacobianLocal(m_da, (DMDATSRHSJacobianLocal)FormRHSJacobianLocal2d, this));
+  }
+
+  if (m_useIJacobian) {
+    PetscCall(DMDATSSetIJacobianLocal(m_da, (DMDATSIJacobianLocal)FormIJacobianLocal2d, this));
+  }
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+template<std::semiregular PDEOptions>
+auto PetscWrap<PDEOptions>::MakeProblemFunctions3d() -> PetscErrorCode
+{
+  PetscFunctionBeginUser;
+
+  PetscCall(DMDATSSetRHSFunctionLocal(m_da, INSERT_VALUES, (DMDATSRHSFunctionLocal)FormRHSFunctionLocal3d, this));
+  PetscCall(DMDATSSetIFunctionLocal(m_da, INSERT_VALUES, (DMDATSIFunctionLocal)FormIFunctionLocal3d, this));
+
+  if (m_useRhsJacobian) {
+    PetscCall(DMDATSSetRHSJacobianLocal(m_da, (DMDATSRHSJacobianLocal)FormRHSJacobianLocal3d, this));
+  }
+
+  if (m_useIJacobian) {
+    PetscCall(DMDATSSetIJacobianLocal(m_da, (DMDATSIJacobianLocal)FormIJacobianLocal3d, this));
+  }
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+template<std::semiregular PDEOptions>
+auto PetscWrap<PDEOptions>::InitialState(DM& distributedMesh, Vec& vec, DMDALocalInfo& info) -> PetscErrorCode
+{
+  assert(Base::m_myPDE != nullptr && "PDE has not been set");
+
+  PetscFunctionBeginUser;
+
+  auto initFunc = [this](std::vector<PetscReal> const& coords) -> std::vector<PetscReal>
+  { return this->Base::m_myPDE->InitCond(coords); };
+
+  return SetInitialState(distributedMesh, vec, info, initFunc);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////// 1D /////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 template<std::semiregular PDEOptions>
 auto PetscWrap<PDEOptions>::FormRHSFunctionLocal1d(
   DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal* aY, PetscReal* aG, void* pwp) -> PetscErrorCode
 {
-  assert(info and info->dim == 1);
+  PetscFunctionBeginUser;
 
-  auto* petscWrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
-  petscWrap->m_user.rhsFuncCalled = PETSC_TRUE;
+  auto* const pwrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
 
-  assert(!petscWrap->m_methodProps.fields.empty() and "Fields have not been set");
-  assert(petscWrap->BaseClass::m_myPDE != nullptr and "PDE has not been set");
+  PetscCheck(info and info->dim == 1,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONG,
+    "Wrong number of dimensions or DMDALocalInfo has not been initialized");
+  PetscCheck(pwrap->Base::m_myPDE != nullptr, PETSC_COMM_WORLD, PETSC_ERR_ARG_NULL, "The PDE system has not been set");
+  PetscCheck(std::ssize(pwrap->m_methodProps.fields) == info->dof,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_INCOMP,
+    "The number of fields and dof must be equal");
 
-  auto const numFields = petscWrap->m_methodProps.fields.size();
-
-  assert(std::cmp_equal(numFields, info->dof));
-
-  // If the vectors aren't the right size, resize them once
-  if (petscWrap->m_inTmp.size() != numFields) {
-    petscWrap->m_inTmp.resize(numFields);
-  }
-
-  if (petscWrap->m_outTmp.size() != numFields) {
-    petscWrap->m_outTmp.resize(numFields);
-  }
-
-  auto& inTmp = petscWrap->m_inTmp;
-  auto& outTmp = petscWrap->m_outTmp;
+  auto aYvec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto aGvec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
 
   for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
-    for (PetscInt field = 0; field < info->dof; ++field) {
-      inTmp[field] = aY[i * info->dof + field];
-    }
+    std::copy_n(&aY[i * info->dof], info->dof, aYvec.begin());
 
     for (PetscInt field = 0; field < info->dof; ++field) {
-      petscWrap->BaseClass::m_myPDE->RHS(inTmp, outTmp, field);
-    }
-
-    for (PetscInt field = 0; field < info->dof; ++field) {
-      aG[i * info->dof + field] = outTmp[field];
+      pwrap->Base::m_myPDE->RHS(std::as_const(aYvec), aGvec, field);
+      std::copy_n(aGvec.begin(), info->dof, &aG[i * info->dof]);
     }
   }
 
-  return 0;
+  pwrap->m_user.rhsFuncCalled = PETSC_TRUE;
+
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
-template<std::semiregular PDEOptions>
-auto PetscWrap<PDEOptions>::FormRHSFunctionLocal2d(
-  DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal** aY, PetscReal** aG, void* pwp) -> PetscErrorCode
-{
-  assert(info and info->dim == 2);
-
-  auto* petscWrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
-  petscWrap->m_user.rhsFuncCalled = PETSC_TRUE;
-
-  assert(!petscWrap->m_methodProps.fields.empty() and "Fields have not been set");
-  assert(petscWrap->BaseClass::m_myPDE != nullptr and "PDE has not been set");
-
-  auto const numFields = petscWrap->m_methodProps.fields.size();
-
-  assert(std::cmp_equal(numFields, info->dof));
-
-  // If the vectors aren't the right size, resize them once
-  if (petscWrap->m_inTmp.size() != numFields) {
-    petscWrap->m_inTmp.resize(numFields);
-  }
-
-  if (petscWrap->m_outTmp.size() != numFields) {
-    petscWrap->m_outTmp.resize(numFields);
-  }
-
-  auto& inTmp = petscWrap->m_inTmp;
-  auto& outTmp = petscWrap->m_outTmp;
-
-  for (PetscInt j = info->ys; j < info->ys + info->ym; ++j) {
-    for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
-      for (PetscInt field = 0; field < info->dof; ++field) {
-        inTmp[field] = aY[j][i * info->dof + field];
-      }
-
-      for (PetscInt field = 0; field < info->dof; ++field) {
-        petscWrap->BaseClass::m_myPDE->RHS(inTmp, outTmp, field);
-      }
-
-      for (PetscInt field = 0; field < info->dof; ++field) {
-        aG[j][i * info->dof + field] = outTmp[field];
-      }
-    }
-  }
-
-  return 0;
-}
-
-template<std::semiregular PDEOptions>
-auto PetscWrap<PDEOptions>::FormRHSFunctionLocal3d(
-  DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal*** aY, PetscReal*** aG, void* pwp) -> PetscErrorCode
-{
-  assert(info and info->dim == 3);
-
-  auto* petscWrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
-  petscWrap->m_user.rhsFuncCalled = PETSC_TRUE;
-
-  assert(!petscWrap->m_methodProps.fields.empty() and "Fields have not been set");
-  assert(petscWrap->BaseClass::m_myPDE != nullptr and "PDE has not been set");
-
-  auto const numFields = petscWrap->m_methodProps.fields.size();
-
-  assert(std::cmp_equal(numFields, info->dof));
-
-  // If the vectors aren't the right size, resize them once
-  if (petscWrap->m_inTmp.size() != numFields) {
-    petscWrap->m_inTmp.resize(numFields);
-  }
-
-  if (petscWrap->m_outTmp.size() != numFields) {
-    petscWrap->m_outTmp.resize(numFields);
-  }
-
-  auto& inTmp = petscWrap->m_inTmp;
-  auto& outTmp = petscWrap->m_outTmp;
-
-  for (PetscInt k = info->zs; k < info->zs + info->zm; ++k) {
-    for (PetscInt j = info->ys; j < info->ys + info->ym; ++j) {
-      for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
-        for (PetscInt field = 0; field < info->dof; ++field) {
-          inTmp[field] = aY[k][j][i * info->dof + field];
-        }
-
-        for (PetscInt field = 0; field < info->dof; ++field) {
-          petscWrap->BaseClass::m_myPDE->RHS(inTmp, outTmp, field);
-        }
-
-        for (PetscInt field = 0; field < info->dof; ++field) {
-          aG[k][j][i * info->dof + field] = outTmp[field];
-        }
-      }
-    }
-  }
-
-  return 0;
-}
-
-///
-/// \brief Computes the Jacobian of the right-hand side for a local DMDA domain partition
-///
-/// This function assembles the Jacobian matrix of the PDE system's right-hand side for a local
-/// sub-domain managed by PETSc's Distributed Array (DMDA). It iterates over grid points in 1D, 2D,
-/// or 3D depending on problem dimensionality, evaluates the Jacobian at each point using the
-/// user-provided PetscWrap instance, and populates the PETSc matrix using stencil-based indexing.
-///
-/// \param[in] info A pointer to DMDA local sub-domain information (grid indices and sizes)
-/// \param[in] time Current simulation time
-/// \param[in] aY An array containing the initial values of the unknown fields in the system
-/// \param[in] asmMat The Jacobian matrix to be assembled (for implicit solvers)
-/// \param[in] precondMat The material from which PETSc can build a preconditioner; typically the same as P
-/// but may differ
-/// \param[in] pwp A void pointer to an instance of PetscWrap (the context)
-/// \returns PetscErrorCode indicating success or failure
-///
 template<std::semiregular PDEOptions>
 auto PetscWrap<PDEOptions>::FormRHSJacobianLocal1d(
   DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal* aY, Mat asmMat, Mat precondMat, void* pwp)
   -> PetscErrorCode
 {
-  assert(info and info->dim == 1);
+  PetscFunctionBeginUser;
 
-  auto* petscWrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
-  petscWrap->m_user.rhsJacobianCalled = PETSC_TRUE;
+  auto* const pwrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
 
-  assert(!petscWrap->m_methodProps.fields.empty() and "Fields have not been set");
-  assert(petscWrap->BaseClass::m_myPDE != nullptr and "PDE has not been set");
+  PetscCheck(info and info->dim == 1,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONG,
+    "Wrong number of dimensions or DMDALocalInfo has not been initialized");
+  PetscCheck(pwrap->Base::m_myPDE != nullptr, PETSC_COMM_WORLD, PETSC_ERR_ARG_NULL, "The PDE system has not been set");
+  PetscCheck(std::ssize(pwrap->m_methodProps.fields) == info->dof,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_INCOMP,
+    "The number of fields and dof must be equal");
 
-  auto const numFields = std::size(petscWrap->m_methodProps.fields);
-
-  assert(std::cmp_equal(numFields, info->dof));
-
-  // If the vectors aren't the right size, resize them once
-  if (petscWrap->m_inTmp.size() != numFields) {
-    petscWrap->m_inTmp.resize(numFields);
-  }
-
-  if (petscWrap->m_colTmp.size() != numFields) {
-    petscWrap->m_colTmp.resize(numFields);
-  }
-  if (petscWrap->m_outTmp.size() != numFields) {
-    petscWrap->m_outTmp.resize(numFields);
-  }
-
-  auto& rowTmp = petscWrap->m_rowTmp;
-  auto& colTmp = petscWrap->m_colTmp;
-  auto& inTmp = petscWrap->m_inTmp;
-  auto& outTmp = petscWrap->m_outTmp;
+  auto aYvec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto outVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto colStenVec = std::vector<MatStencil>(static_cast<std::size_t>(info->dof), MatStencil {});
+  auto rowSten = MatStencil {};
 
   for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
-    rowTmp.i = i;
+    std::copy_n(&aY[i * info->dof], info->dof, aYvec.begin());
+
+    // Fill up colStenVec once before calling MatSetValuesStencil
+    for (PetscInt field = 0; field < info->dof; ++field) {
+      colStenVec[field] = {.k = 0, .j = 0, .i = i, .c = field};
+    }
 
     for (PetscInt field = 0; field < info->dof; ++field) {
-      inTmp[field] = aY[i * info->dof + field];
-    }
+      rowSten = {.k = 0, .j = 0, .i = i, .c = field};
+      pwrap->Base::m_myPDE->JacRHS(std::as_const(aYvec), outVec, field);
 
-    for (PetscInt field = 0; field < info->dof; ++field) {
-      colTmp[field].i = i;
-      colTmp[field].c = field;
-
-      rowTmp.c = field;
-      petscWrap->BaseClass::m_myPDE->JacRHS(inTmp, outTmp, field);
-      PetscCall(MatSetValuesStencil(precondMat, 1, &rowTmp, info->dof, colTmp.data(), outTmp.data(), INSERT_VALUES));
+      PetscCall(
+        MatSetValuesStencil(precondMat, 1, &rowSten, info->dof, colStenVec.data(), outVec.data(), INSERT_VALUES));
     }
   }
 
@@ -870,300 +948,113 @@ auto PetscWrap<PDEOptions>::FormRHSJacobianLocal1d(
     PetscCall(MatAssemblyEnd(asmMat, MAT_FINAL_ASSEMBLY));
   }
 
-  return 0;
+  pwrap->m_user.rhsJacobianCalled = PETSC_TRUE;
+
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
-template<std::semiregular PDEOptions>
-auto PetscWrap<PDEOptions>::FormRHSJacobianLocal2d(
-  DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal** aY, Mat asmMat, Mat precondMat, void* pwp)
-  -> PetscErrorCode
-{
-  assert(info and info->dim == 2);
-
-  auto* petscWrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
-  petscWrap->m_user.rhsJacobianCalled = PETSC_TRUE;
-
-  assert(!petscWrap->m_methodProps.fields.empty() and "Fields have not been set");
-  assert(petscWrap->BaseClass::m_myPDE != nullptr and "PDE has not been set");
-
-  auto const numFields = std::size(petscWrap->m_methodProps.fields);
-
-  assert(std::cmp_equal(numFields, info->dof));
-
-  // If the vectors aren't the right size, resize them once
-  if (petscWrap->m_inTmp.size() != numFields) {
-    petscWrap->m_inTmp.resize(numFields);
-  }
-
-  if (petscWrap->m_colTmp.size() != numFields) {
-    petscWrap->m_colTmp.resize(numFields);
-  }
-  if (petscWrap->m_outTmp.size() != numFields) {
-    petscWrap->m_outTmp.resize(numFields);
-  }
-
-  auto& rowTmp = petscWrap->m_rowTmp;
-  auto& colTmp = petscWrap->m_colTmp;
-  auto& inTmp = petscWrap->m_inTmp;
-  auto& outTmp = petscWrap->m_outTmp;
-
-  for (PetscInt j = info->ys; j < info->ys + info->ym; ++j) {
-    rowTmp.j = j;
-
-    for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
-      rowTmp.i = i;
-
-      for (PetscInt field = 0; field < info->dof; ++field) {
-        inTmp[field] = aY[j][i * info->dof + field];
-      }
-
-      for (PetscInt field = 0; field < info->dof; ++field) {
-        colTmp[field].i = i;
-        colTmp[field].j = j;
-        colTmp[field].c = field;
-
-        rowTmp.c = field;
-
-        petscWrap->BaseClass::m_myPDE->JacRHS(inTmp, outTmp, field);
-        PetscCall(MatSetValuesStencil(precondMat, 1, &rowTmp, info->dof, colTmp.data(), outTmp.data(), INSERT_VALUES));
-      }
-    }
-  }
-
-  PetscCall(MatAssemblyBegin(precondMat, MAT_FINAL_ASSEMBLY));
-  PetscCall(MatAssemblyEnd(precondMat, MAT_FINAL_ASSEMBLY));
-
-  if (asmMat != precondMat) {
-    PetscCall(MatAssemblyBegin(asmMat, MAT_FINAL_ASSEMBLY));
-    PetscCall(MatAssemblyEnd(asmMat, MAT_FINAL_ASSEMBLY));
-  }
-
-  return 0;
-}
-
-template<std::semiregular PDEOptions>
-auto PetscWrap<PDEOptions>::FormRHSJacobianLocal3d(
-  DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal*** aY, Mat asmMat, Mat precondMat, void* pwp)
-  -> PetscErrorCode
-{
-  assert(info and info->dim == 3);
-
-  auto* petscWrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
-  petscWrap->m_user.rhsJacobianCalled = PETSC_TRUE;
-
-  assert(!petscWrap->m_methodProps.fields.empty() and "Fields have not been set");
-  assert(petscWrap->BaseClass::m_myPDE != nullptr and "PDE has not been set");
-
-  auto const numFields = std::size(petscWrap->m_methodProps.fields);
-
-  assert(std::cmp_equal(numFields, info->dof));
-
-  // If the vectors aren't the right size, resize them once
-  if (petscWrap->m_inTmp.size() != numFields) {
-    petscWrap->m_inTmp.resize(numFields);
-  }
-
-  if (petscWrap->m_colTmp.size() != numFields) {
-    petscWrap->m_colTmp.resize(numFields);
-  }
-  if (petscWrap->m_outTmp.size() != numFields) {
-    petscWrap->m_outTmp.resize(numFields);
-  }
-
-  auto& rowTmp = petscWrap->m_rowTmp;
-  auto& colTmp = petscWrap->m_colTmp;
-  auto& inTmp = petscWrap->m_inTmp;
-  auto& outTmp = petscWrap->m_outTmp;
-
-  for (PetscInt k = info->zs; k < info->zs + info->zm; ++k) {
-    rowTmp.k = k;
-
-    for (PetscInt j = info->ys; j < info->ys + info->ym; ++j) {
-      rowTmp.j = j;
-
-      for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
-        rowTmp.i = i;
-
-        for (PetscInt field = 0; field < info->dof; ++field) {
-          inTmp[field] = aY[k][j][i * info->dof + field];
-        }
-
-        for (PetscInt field = 0; field < info->dof; ++field) {
-          colTmp[field].i = i;
-          colTmp[field].j = j;
-          colTmp[field].k = k;
-          colTmp[field].c = field;
-
-          rowTmp.c = field;
-
-          petscWrap->BaseClass::m_myPDE->JacRHS(inTmp, outTmp, field);
-          PetscCall(
-            MatSetValuesStencil(precondMat, 1, &rowTmp, info->dof, colTmp.data(), outTmp.data(), INSERT_VALUES));
-        }
-      }
-    }
-  }
-
-  PetscCall(MatAssemblyBegin(precondMat, MAT_FINAL_ASSEMBLY));
-  PetscCall(MatAssemblyEnd(precondMat, MAT_FINAL_ASSEMBLY));
-
-  if (asmMat != precondMat) {
-    PetscCall(MatAssemblyBegin(asmMat, MAT_FINAL_ASSEMBLY));
-    PetscCall(MatAssemblyEnd(asmMat, MAT_FINAL_ASSEMBLY));
-  }
-
-  return 0;
-}
-
-///
-/// \brief FormIFunctionLocal - Compute the local implicit function residuals for the shallow water
-/// equations
-///
-/// \param[in] info   DMDA local information structure containing grid indices and dimensions
-/// \param[in] time   Current time value
-/// \param[in] aY     Array of field variables
-/// \param[out] aYdot Array of time derivatives of field variables
-/// \param[in,out] aF Array to store computed residuals for the implicit function
-/// \param[in] pwp    A pointer to an instance of PetscWrap
-///
-/// \returns PetscErrorCode indicating success (0) or error code
-///
 template<std::semiregular PDEOptions>
 auto PetscWrap<PDEOptions>::FormIFunctionLocal1d(
   DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal* aY, PetscReal* aYdot, PetscReal* aF, void* pwp)
   -> PetscErrorCode
 {
-  assert(info->dim and info->dim == 1);
+  PetscFunctionBeginUser;
 
-  auto* petscWrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
-  petscWrap->m_user.iFuncCalled = PETSC_TRUE;
+  auto* const pwrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
 
-  assert(!petscWrap->m_methodProps.fields.empty() and "Fields have not been set");
-  assert(petscWrap->BaseClass::m_myPDE != nullptr && "PDE has not been set");
+  PetscCheck(info and info->dim == 1,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONG,
+    "Wrong number of dimensions or DMDALocalInfo has not been initialized");
+  PetscCheck(pwrap->Base::m_myPDE != nullptr, PETSC_COMM_WORLD, PETSC_ERR_ARG_NULL, "The PDE system has not been set");
+  PetscCheck(std::ssize(pwrap->m_methodProps.fields) == info->dof,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_INCOMP,
+    "The number of fields and dof must be equal");
 
-  auto const& stencilData = petscWrap->m_myStencilData;
-  auto const numFields = std::size(petscWrap->m_methodProps.fields);
+  // std::vectors for aY, aYdot, and aF
 
-  assert(std::cmp_equal(numFields, info->dof));
+  auto ayVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto ayDotVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto afASplitVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto afBSplitVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
 
-  // If the vectors aren't the right size, resize them once
-  if (petscWrap->m_inTmp.size() != numFields) {
-    petscWrap->m_inTmp.resize(numFields);
-  }
+  // std::vectors for stencil grid weights
 
-  if (petscWrap->m_outTmp.size() != numFields) {
-    petscWrap->m_outTmp.resize(numFields);
-  }
+  auto const& myd1StenGrid = pwrap->m_myStencilGridd;
+  auto const& myd2StenGrid = pwrap->m_myStencilGridd2;
+  auto const& myd3StenGrid = pwrap->m_myStencilGridd3;
 
-  // Set up time-derivative container
+  // std::vectors for storing stencil grid contributions
 
-  if (petscWrap->m_dTime.size() != numFields) {
-    petscWrap->m_dTime.resize(numFields);
-  }
-
-  // Set up first-order derivative container
-
-  if (petscWrap->m_indx.size() != numFields) {
-    petscWrap->m_indx.resize(numFields);
-  }
-
-  // Set up second-order derivative container
-
-  if (petscWrap->m_myStencilGridd2.has_value()) {
-    if (!petscWrap->m_ind2x.has_value()) {
-      petscWrap->m_ind2x = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind2x->size() != numFields) {
-      petscWrap->m_ind2x->resize(numFields);
-    }
-  }
-
-  // Set up third-order derivative container
-
-  if (petscWrap->m_myStencilGridd3.has_value()) {
-    if (!petscWrap->m_ind3x.has_value()) {
-      petscWrap->m_ind3x = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind3x->size() != numFields) {
-      petscWrap->m_ind3x->resize(numFields);
-    }
-  }
-
-  auto& inTmp = petscWrap->m_inTmp;
-  auto& dTime = petscWrap->m_dTime;
-
-  auto& outTmp = petscWrap->m_outTmp;
-
-  auto const& myd1StenGrid = petscWrap->m_myStencilGridd;
-  auto const& myd2StenGrid = petscWrap->m_myStencilGridd2;
-  auto const& myd3StenGrid = petscWrap->m_myStencilGridd3;
-
-  auto& indx = petscWrap->m_indx;
-  auto& ind2x = petscWrap->m_ind2x;
-  auto& ind3x = petscWrap->m_ind3x;
-
-  auto const stencilWidth = std::invoke(
-    [&stencilData, &info]
+  auto indx = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto ind2x = std::invoke(
+    [&info, &myd2StenGrid]() -> std::optional<std::vector<PetscReal>>
     {
-      if (info->dim == 1) {
-        return stencilData[2];
+      if (myd2StenGrid.has_value()) {
+        return std::make_optional<std::vector<PetscReal>>(static_cast<std::size_t>(info->dof), 0);
       }
 
-      if (info->dim == 2) {
-        return stencilData[3];
-      }
-
-      return stencilData[4];
+      return std::nullopt;
     });
 
+  auto ind3x = std::invoke(
+    [&info, &myd3StenGrid]() -> std::optional<std::vector<PetscReal>>
+    {
+      if (myd3StenGrid.has_value()) {
+        return std::make_optional<std::vector<PetscReal>>(static_cast<std::size_t>(info->dof), 0);
+      }
+
+      return std::nullopt;
+    });
+
+  // We're only interested in the per-axis neighbours of the current grid point
+  auto const stencilSize = (2 * info->sw) + 1;
+
   // Fill ghost cells at domain boundaries using nearest interior values
-  auto const netWidth = static_cast<PetscInt>(std::floor(stencilWidth / 2));
 
   if (info->bx == DM_BOUNDARY_GHOSTED) {
-    FillGhostCells1d(petscWrap->m_da, petscWrap->m_info);
+    FillGhostCells1d(*info, aY);
   }
 
   for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
+    std::copy_n(&aY[i * info->dof], info->dof, ayVec.begin());
+    std::copy_n(&aYdot[i * info->dof], info->dof, ayDotVec.begin());
+
+    std::fill(indx.begin(), indx.end(), 0);
+
     for (PetscInt field = 0; field < info->dof; ++field) {
-      inTmp[field] = aY[i * info->dof + field];
-      dTime[field] = aYdot[i * info->dof + field];
-    }
-
-    if (myd1StenGrid.has_value()) {
-      std::fill(indx.begin(), indx.end(), 0);
-
-      for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-        for (PetscInt field = 0; field < info->dof; ++field) {
-          // First derivative in x direction
-          indx[field] += myd1StenGrid->at(pos) * aY[(i - netWidth + pos) * info->dof + field];
-        }
+      for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+        // First derivative in x direction
+        indx[field] += myd1StenGrid.at(pos) * aY[(i - info->sw + pos) * info->dof + field];
       }
     }
 
-    if (myd2StenGrid.has_value() and ind2x.has_value()) {
+    if (myd2StenGrid.has_value()) {
       std::fill(ind2x->begin(), ind2x->end(), 0);
 
-      for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-        for (PetscInt field = 0; field < info->dof; ++field) {
+      for (PetscInt field = 0; field < info->dof; ++field) {
+        for (PetscInt pos = 0; pos < stencilSize; ++pos) {
           // Second derivative in x direction
-          ind2x->at(field) += myd2StenGrid->at(pos) * aY[(i - netWidth + pos) * info->dof + field];
+          ind2x->at(field) += myd2StenGrid->at(pos) * aY[(i - info->sw + pos) * info->dof + field];
         }
       }
     }
 
-    if (myd3StenGrid.has_value() and ind3x.has_value()) {
+    if (myd3StenGrid.has_value()) {
       std::fill(ind3x->begin(), ind3x->end(), 0);
 
-      for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-        for (PetscInt field = 0; field < info->dof; ++field) {
+      for (PetscInt field = 0; field < info->dof; ++field) {
+        for (PetscInt pos = 0; pos < stencilSize; ++pos) {
           // Third derivative in x direction
-          ind3x->at(field) += myd3StenGrid->at(pos) * aY[(i - netWidth + pos) * info->dof + field];
+          ind3x->at(field) += myd3StenGrid->at(pos) * aY[(i - info->sw + pos) * info->dof + field];
         }
       }
     }
 
-    petscWrap->BaseClass::m_myPDE->LHSOpAsplit(inTmp,
-      dTime,
+    // A-split: time term
+    pwrap->Base::m_myPDE->LHSOpAsplit(ayVec,
+      ayDotVec,
       indx,
       std::nullopt,
       std::nullopt,
@@ -1173,430 +1064,32 @@ auto PetscWrap<PDEOptions>::FormIFunctionLocal1d(
       ind3x,
       std::nullopt,
       std::nullopt,
-      outTmp);
+      afASplitVec);
+
+    // B-split: spatial flux term (uses indx = dvdx)
+    pwrap->Base::m_myPDE->LHSOpBsplit(ayVec,
+      ayDotVec,
+      indx,
+      std::nullopt,
+      std::nullopt,
+      ind2x,
+      std::nullopt,
+      std::nullopt,
+      ind3x,
+      std::nullopt,
+      std::nullopt,
+      afBSplitVec);
 
     for (PetscInt field = 0; field < info->dof; ++field) {
-      aF[i * info->dof + field] = outTmp[field];
+      aF[i * info->dof + field] = ayDotVec[field] + afBSplitVec[field];
     }
   }
 
-  return 0;
+  pwrap->m_user.iFuncCalled = PETSC_TRUE;
+
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
-template<std::semiregular PDEOptions>
-auto PetscWrap<PDEOptions>::FormIFunctionLocal2d(
-  DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal** aY, PetscReal** aYdot, PetscReal** aF, void* pwp)
-  -> PetscErrorCode
-{
-  assert(info->dim and info->dim == 2);
-
-  auto* petscWrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
-  petscWrap->m_user.iFuncCalled = PETSC_TRUE;
-
-  assert(!petscWrap->m_methodProps.fields.empty() and "Fields have not been set");
-  assert(petscWrap->BaseClass::m_myPDE != nullptr && "PDE has not been set");
-
-  auto const& stencilData = petscWrap->m_myStencilData;
-  auto const numFields = std::size(petscWrap->m_methodProps.fields);
-
-  assert(std::cmp_equal(numFields, info->dof));
-
-  // If the vectors aren't the right size, resize them once
-  if (petscWrap->m_inTmp.size() != numFields) {
-    petscWrap->m_inTmp.resize(numFields);
-  }
-
-  if (petscWrap->m_outTmp.size() != numFields) {
-    petscWrap->m_outTmp.resize(numFields);
-  }
-
-  // Set up time-derivative container
-
-  if (petscWrap->m_dTime.size() != numFields) {
-    petscWrap->m_dTime.resize(numFields);
-  }
-
-  // Set up first-order derivative containers
-
-  if (petscWrap->m_indx.size() != numFields) {
-    petscWrap->m_indx.resize(numFields);
-  }
-
-  if (petscWrap->m_indy.size() != numFields) {
-    petscWrap->m_indy.resize(numFields);
-  }
-
-  // Set up second-order derivative containers
-
-  if (petscWrap->m_myStencilGridd2.has_value()) {
-    if (!petscWrap->m_ind2x.has_value()) {
-      petscWrap->m_ind2x = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind2x->size() != numFields) {
-      petscWrap->m_ind2x->resize(numFields);
-    }
-
-    if (!petscWrap->m_ind2y.has_value()) {
-      petscWrap->m_ind2y = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind2y->size() != numFields) {
-      petscWrap->m_ind2y->resize(numFields);
-    }
-  }
-
-  // Set up third-order derivative containers
-
-  if (petscWrap->m_myStencilGridd3.has_value()) {
-    if (!petscWrap->m_ind3x.has_value()) {
-      petscWrap->m_ind3x = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind3x->size() != numFields) {
-      petscWrap->m_ind3x->resize(numFields);
-    }
-
-    if (!petscWrap->m_ind3y.has_value()) {
-      petscWrap->m_ind3y = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind3y->size() != numFields) {
-      petscWrap->m_ind3y->resize(numFields);
-    }
-  }
-
-  auto& inTmp = petscWrap->m_inTmp;
-  auto& dTime = petscWrap->m_dTime;
-
-  auto& outTmp = petscWrap->m_outTmp;
-
-  auto const& myd1StenGrid = petscWrap->m_myStencilGridd;
-  auto const& myd2StenGrid = petscWrap->m_myStencilGridd2;
-  auto const& myd3StenGrid = petscWrap->m_myStencilGridd3;
-
-  auto& indx = petscWrap->m_indx;
-  auto& ind2x = petscWrap->m_ind2x;
-  auto& ind3x = petscWrap->m_ind3x;
-
-  auto& indy = petscWrap->m_indy;
-  auto& ind2y = petscWrap->m_ind2y;
-  auto& ind3y = petscWrap->m_ind3y;
-
-  auto const stencilWidth = std::invoke(
-    [&stencilData, &info]
-    {
-      if (info->dim == 1) {
-        return stencilData[2];
-      }
-
-      if (info->dim == 2) {
-        return stencilData[3];
-      }
-
-      return stencilData[4];
-    });
-
-  // Fill ghost cells at domain boundaries using nearest interior values
-  auto const netWidth = static_cast<PetscInt>(std::floor(stencilWidth / 2));
-
-  if (info->bx == DM_BOUNDARY_GHOSTED and info->by == DM_BOUNDARY_GHOSTED) {
-    FillGhostCells2d(petscWrap->m_da, petscWrap->m_info);
-  }
-
-  for (PetscInt j = info->ys; j < info->ys + info->ym; ++j) {
-    for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
-      for (PetscInt field = 0; field < info->dof; ++field) {
-        inTmp[field] = aY[j][i * info->dof + field];
-        dTime[field] = aYdot[j][i * info->dof + field];
-      }
-
-      if (myd1StenGrid.has_value()) {
-        std::fill(indx.begin(), indx.end(), 0);
-
-        for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-          for (PetscInt field = 0; field < info->dof; ++field) {
-            // First derivative in x direction
-            indx[field] += myd1StenGrid->at(pos) * aY[j][(i - netWidth + pos) * info->dof + field];
-
-            // First derivative in y direction
-            indy[field] += myd1StenGrid->at(pos) * aY[j - netWidth + pos][i * info->dof + field];
-          }
-        }
-      }
-
-      if (myd2StenGrid.has_value() and ind2x.has_value()) {
-        std::fill(ind2x->begin(), ind2x->end(), 0);
-
-        for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-          for (PetscInt field = 0; field < info->dof; ++field) {
-            // Second derivative in x direction
-            ind2x->at(field) += myd2StenGrid->at(pos) * aY[j][(i - netWidth + pos) * info->dof + field];
-
-            // Second derivative in y direction
-            ind2y->at(field) += myd2StenGrid->at(pos) * aY[j - netWidth + pos][i * info->dof + field];
-          }
-        }
-      }
-
-      if (myd3StenGrid.has_value() and ind3x.has_value()) {
-        std::fill(ind3x->begin(), ind3x->end(), 0);
-
-        for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-          for (PetscInt field = 0; field < info->dof; ++field) {
-            // Third derivative in x direction
-            ind3x->at(field) += myd3StenGrid->at(pos) * aY[j][(i - netWidth + pos) * info->dof + field];
-
-            // Third derivative in y direction
-            ind3y->at(field) += myd3StenGrid->at(pos) * aY[j - netWidth + pos][i * info->dof + field];
-          }
-        }
-      }
-
-      petscWrap->BaseClass::m_myPDE->LHSOpAsplit(
-        inTmp, dTime, indx, indy, std::nullopt, ind2x, ind2y, std::nullopt, ind3x, ind3y, std::nullopt, outTmp);
-
-      for (PetscInt field = 0; field < info->dof; ++field) {
-        aF[j][i * info->dof + field] = outTmp[field];
-      }
-    }
-  }
-
-  return 0;
-}
-
-template<std::semiregular PDEOptions>
-auto PetscWrap<PDEOptions>::FormIFunctionLocal3d(
-  DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal*** aY, PetscReal*** aYdot, PetscReal*** aF, void* pwp)
-  -> PetscErrorCode
-{
-  assert(info->dim and info->dim == 3);
-
-  auto* petscWrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
-  petscWrap->m_user.iFuncCalled = PETSC_TRUE;
-
-  assert(!petscWrap->m_methodProps.fields.empty() and "Fields have not been set");
-  assert(petscWrap->BaseClass::m_myPDE != nullptr && "PDE has not been set");
-
-  auto const& stencilData = petscWrap->m_myStencilData;
-  auto const numFields = std::size(petscWrap->m_methodProps.fields);
-
-  assert(std::cmp_equal(numFields, info->dof));
-
-  // If the vectors aren't the right size, resize them once
-  if (petscWrap->m_inTmp.size() != numFields) {
-    petscWrap->m_inTmp.resize(numFields);
-  }
-
-  if (petscWrap->m_outTmp.size() != numFields) {
-    petscWrap->m_outTmp.resize(numFields);
-  }
-
-  // Set up time-derivative container
-
-  if (petscWrap->m_dTime.size() != numFields) {
-    petscWrap->m_dTime.resize(numFields);
-  }
-
-  // Set up first-order derivative containers
-
-  if (petscWrap->m_indx.size() != numFields) {
-    petscWrap->m_indx.resize(numFields);
-  }
-
-  if (petscWrap->m_indy.size() != numFields) {
-    petscWrap->m_indy.resize(numFields);
-  }
-
-  if (petscWrap->m_indz.size() != numFields) {
-    petscWrap->m_indz.resize(numFields);
-  }
-
-  // Set up second-order derivative containers
-
-  if (petscWrap->m_myStencilGridd2.has_value()) {
-    if (!petscWrap->m_ind2x.has_value()) {
-      petscWrap->m_ind2x = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind2x->size() != numFields) {
-      petscWrap->m_ind2x->resize(numFields);
-    }
-  }
-
-  if (petscWrap->m_myStencilGridd2.has_value()) {
-    if (!petscWrap->m_ind2y.has_value()) {
-      petscWrap->m_ind2y = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind2y->size() != numFields) {
-      petscWrap->m_ind2y->resize(numFields);
-    }
-  }
-
-  if (petscWrap->m_myStencilGridd2.has_value()) {
-    if (!petscWrap->m_ind2z.has_value()) {
-      petscWrap->m_ind2z = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind2z->size() != numFields) {
-      petscWrap->m_ind2z->resize(numFields);
-    }
-  }
-
-  // Set up third-order derivative containers
-
-  if (petscWrap->m_myStencilGridd3.has_value()) {
-    if (!petscWrap->m_ind3x.has_value()) {
-      petscWrap->m_ind3x = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind3x->size() != numFields) {
-      petscWrap->m_ind3x->resize(numFields);
-    }
-  }
-
-  if (petscWrap->m_myStencilGridd3.has_value()) {
-    if (!petscWrap->m_ind3y.has_value()) {
-      petscWrap->m_ind3y = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind3y->size() != numFields) {
-      petscWrap->m_ind3y->resize(numFields);
-    }
-  }
-
-  if (petscWrap->m_myStencilGridd3.has_value()) {
-    if (!petscWrap->m_ind3z.has_value()) {
-      petscWrap->m_ind3z = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind3z->size() != numFields) {
-      petscWrap->m_ind3z->resize(numFields);
-    }
-  }
-
-  auto& inTmp = petscWrap->m_inTmp;
-  auto& dTime = petscWrap->m_dTime;
-
-  auto& outTmp = petscWrap->m_outTmp;
-
-  auto const& myd1StenGrid = petscWrap->m_myStencilGridd;
-  auto const& myd2StenGrid = petscWrap->m_myStencilGridd2;
-  auto const& myd3StenGrid = petscWrap->m_myStencilGridd3;
-
-  auto& indx = petscWrap->m_indx;
-  auto& ind2x = petscWrap->m_ind2x;
-  auto& ind3x = petscWrap->m_ind3x;
-
-  auto& indy = petscWrap->m_indy;
-  auto& ind2y = petscWrap->m_ind2y;
-  auto& ind3y = petscWrap->m_ind3y;
-
-  auto& indz = petscWrap->m_indz;
-  auto& ind2z = petscWrap->m_ind2z;
-  auto& ind3z = petscWrap->m_ind3z;
-
-  auto const stencilWidth = std::invoke(
-    [&stencilData, &info]
-    {
-      if (info->dim == 1) {
-        return stencilData[2];
-      }
-
-      if (info->dim == 2) {
-        return stencilData[3];
-      }
-
-      return stencilData[4];
-    });
-
-  // Fill ghost cells at domain boundaries using nearest interior values
-  auto const netWidth = static_cast<PetscInt>(std::floor(stencilWidth / 2));
-
-  if (info->bx == DM_BOUNDARY_GHOSTED and info->by == DM_BOUNDARY_GHOSTED and info->bz == DM_BOUNDARY_GHOSTED) {
-    FillGhostCells3d(petscWrap->m_da, petscWrap->m_info);
-  }
-
-  for (PetscInt k = info->zs; k < info->zs + info->zm; ++k) {
-    for (PetscInt j = info->ys; j < info->ys + info->ym; ++j) {
-      for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
-        for (PetscInt field = 0; field < info->dof; ++field) {
-          inTmp[field] = aY[k][j][i * info->dof + field];
-          dTime[field] = aYdot[k][j][i * info->dof + field];
-        }
-
-        if (myd1StenGrid.has_value()) {
-          std::fill(indx.begin(), indx.end(), 0);
-
-          for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-            for (PetscInt field = 0; field < info->dof; ++field) {
-              // First derivative in x direction
-              indx[field] += myd1StenGrid->at(pos) * aY[k][j][(i - netWidth + pos) * info->dof + field];
-
-              // First derivative in y direction
-              indy[field] += myd1StenGrid->at(pos) * aY[k][j - netWidth + pos][i * info->dof + field];
-
-              // First derivative in z direction
-              indz[field] += myd1StenGrid->at(pos) * aY[k - netWidth + pos][j][i * info->dof + field];
-            }
-          }
-        }
-
-        if (myd2StenGrid.has_value() and ind2x.has_value()) {
-          std::fill(ind2x->begin(), ind2x->end(), 0);
-
-          for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-            for (PetscInt field = 0; field < info->dof; ++field) {
-              // Second derivative in x direction
-              ind2x->at(field) += myd2StenGrid->at(pos) * aY[k][j][(i - netWidth + pos) * info->dof + field];
-
-              // Second derivative in y direction
-              ind2y->at(field) += myd2StenGrid->at(pos) * aY[k][j - netWidth + pos][i * info->dof + field];
-
-              // Second derivative in z direction
-              ind2z->at(field) += myd2StenGrid->at(pos) * aY[k - netWidth + pos][j][i * info->dof + field];
-            }
-          }
-        }
-
-        if (myd3StenGrid.has_value() and ind3x.has_value()) {
-          std::fill(ind3x->begin(), ind3x->end(), 0);
-
-          for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-            for (PetscInt field = 0; field < info->dof; ++field) {
-              // Third derivative in x direction
-              ind3x->at(field) += myd3StenGrid->at(pos) * aY[k][j][(i - netWidth + pos) * info->dof + field];
-
-              // Third derivative in y direction
-              ind3y->at(field) += myd3StenGrid->at(pos) * aY[k][j - netWidth + pos][i * info->dof + field];
-
-              // Third derivative in z direction
-              ind3z->at(field) += myd3StenGrid->at(pos) * aY[k - netWidth + pos][j][i * info->dof + field];
-            }
-          }
-        }
-
-        petscWrap->BaseClass::m_myPDE->LHSOpAsplit(
-          inTmp, dTime, indx, indy, indz, ind2x, ind2y, ind2z, ind3x, ind3y, ind3z, outTmp);
-
-        for (PetscInt field = 0; field < info->dof; ++field) {
-          aF[k][j][i * info->dof + field] = outTmp[field];
-        }
-      }
-    }
-  }
-
-  return 0;
-}
-
-///
-/// \brief Computes the Jacobian matrix for the implicit function F(t, Y, Ẏ) in the Shallow Water
-/// equations
-///
-/// \param[in] info  A pointer to DMDA local sub-domain information (grid indices and sizes)
-/// \param[in] time  Current simulation time
-/// \param[in] aY    An array containing the initial values of the unknown fields in the system at
-/// all grid points in the local sub-domain
-/// \param[in] aYdot Array of time derivatives at all grid points
-/// \param[in] shift Shift parameter (typically dt/theta) for implicit time integration; multiplies
-/// the Ẏ contribution to the domain
-/// \param[in,out] asmMat The Jacobian matrix to be assembled (for implicit solvers)
-/// \param[in,out] precondMat The material from which PETSc can build a preconditioner matrix; typically the
-/// same as P but may differ; filled with stencil values representing spatial discretization
-/// \param[in] pwp   A void pointer to an instance of PetscWrap (the context)
-/// \returns PetscErrorCode indicating success or failure
-///
 template<std::semiregular PDEOptions>
 auto PetscWrap<PDEOptions>::FormIJacobianLocal1d(DMDALocalInfo* info,
   [[maybe_unused]] PetscReal time,
@@ -1607,172 +1100,162 @@ auto PetscWrap<PDEOptions>::FormIJacobianLocal1d(DMDALocalInfo* info,
   Mat precondMat,
   void* pwp) -> PetscErrorCode
 {
-  assert(info and info->dim == 1);
+  PetscFunctionBeginUser;
 
-  auto* petscWrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
-  petscWrap->m_user.iJacobianCalled = PETSC_TRUE;
+  auto* const pwrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
 
-  assert(!petscWrap->m_methodProps.fields.empty() and "Fields have not been set");
-  assert(petscWrap->BaseClass::m_myPDE != nullptr && "PDE has not been set");
+  PetscCheck(info and info->dim == 1,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONG,
+    "Wrong number of dimensions or DMDALocalInfo has not been initialized");
+  PetscCheck(pwrap->Base::m_myPDE != nullptr, PETSC_COMM_WORLD, PETSC_ERR_ARG_NULL, "The PDE system has not been set");
+  PetscCheck(std::ssize(pwrap->m_methodProps.fields) == info->dof,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_INCOMP,
+    "The number of fields and dof must be equal");
 
-  auto const& stenData = petscWrap->m_myStencilData;
-  auto const numFields = std::size(petscWrap->m_methodProps.fields);
+  // std::vectors for aY, and aYdot
 
-  assert(std::cmp_equal(numFields, info->dof));
+  auto ayVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto ayDotVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
 
-  // If the vectors aren't the right size, resize them once
-  if (petscWrap->m_inTmp.size() != numFields) {
-    petscWrap->m_inTmp.resize(numFields);
-  }
+  // std::vectors for stencil grid weights
 
-  // Set up time derivative container
+  auto const& myd1StenGrid = pwrap->m_myStencilGridd;
+  auto const& myd2StenGrid = pwrap->m_myStencilGridd2;
+  auto const& myd3StenGrid = pwrap->m_myStencilGridd3;
 
-  if (petscWrap->m_dTime.size() != numFields) {
-    petscWrap->m_dTime.resize(numFields);
-  }
+  // std::vectors for storing stencil grid contributions
 
-  // Set up first-order spatial derivative container
-
-  if (petscWrap->m_indx.size() != numFields) {
-    petscWrap->m_indx.resize(numFields);
-  }
-
-  auto const stencilWidth = std::invoke(
-    [&stenData, &info]
+  auto indx = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto ind2x = std::invoke(
+    [&info, &myd2StenGrid]() -> std::optional<std::vector<PetscReal>>
     {
-      if (info->dim == 1) {
-        return stenData[2];
+      if (myd2StenGrid.has_value()) {
+        return std::make_optional<std::vector<PetscReal>>(static_cast<std::size_t>(info->dof), 0);
       }
 
-      if (info->dim == 2) {
-        return stenData[3];
-      }
-
-      return stenData[4];
+      return std::nullopt;
     });
 
-  if (std::cmp_not_equal(petscWrap->m_vTmp.size(), stencilWidth)) {
-    petscWrap->m_vTmp.resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_vdTmp.size(), stencilWidth)) {
-    petscWrap->m_vdTmp.resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_vd2Tmp->size(), stencilWidth)) {
-    petscWrap->m_vd2Tmp->resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_vd3Tmp->size(), stencilWidth)) {
-    petscWrap->m_vd3Tmp->resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_vTmpTmp.size(), stencilWidth)) {
-    petscWrap->m_vTmpTmp.resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_colTmp.size(), stencilWidth)) {
-    petscWrap->m_colTmp.resize(stencilWidth);
-  }
+  auto ind3x = std::invoke(
+    [&info, &myd3StenGrid]() -> std::optional<std::vector<PetscReal>>
+    {
+      if (myd3StenGrid.has_value()) {
+        return std::make_optional<std::vector<PetscReal>>(static_cast<std::size_t>(info->dof), 0);
+      }
 
-  // Set up second-order spatial derivative container
+      return std::nullopt;
+    });
 
-  if (petscWrap->m_myStencilGridd2.has_value()) {
-    if (!petscWrap->m_ind2x.has_value()) {
-      petscWrap->m_ind2x = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind2x->size() != numFields) {
-      petscWrap->m_ind2x->resize(numFields);
-    }
-  }
+  // We're only interested in the per-axis neighbours of the current grid point
+  auto const stencilSize = (2 * info->sw) + 1;
 
-  // Set up third-order spatial derivative container
+  auto rowSten = MatStencil {};
+  auto colStenVec = std::vector<MatStencil>(static_cast<std::size_t>(stencilSize), MatStencil {});
 
-  if (petscWrap->m_myStencilGridd3.has_value()) {
-    if (!petscWrap->m_ind3x.has_value()) {
-      petscWrap->m_ind3x = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind3x->size() != numFields) {
-      petscWrap->m_ind3x->resize(numFields);
-    }
-  }
+  auto vVec = std::vector<PetscReal>(static_cast<std::size_t>(stencilSize));
 
-  auto& rowTmp = petscWrap->m_rowTmp;
-  auto& inTmp = petscWrap->m_inTmp;
-  auto& dTime = petscWrap->m_dTime;
+  auto vTmp = std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0);
 
-  auto const& myd1StenGrid = petscWrap->m_myStencilGridd;
-  auto const& myd2StenGrid = petscWrap->m_myStencilGridd2;
-  auto const& myd3StenGrid = petscWrap->m_myStencilGridd3;
+  auto [vdASplitVec, vdBSplitVec] = std::make_pair(std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0),
+    std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0));
 
-  auto& indx = petscWrap->m_indx;
-  auto& ind2x = petscWrap->m_ind2x;
-  auto& ind3x = petscWrap->m_ind3x;
+  using PairOfOptionalVectors = std::pair<std::optional<std::vector<PetscReal>>, std::optional<std::vector<PetscReal>>>;
 
-  auto& vTmp = petscWrap->m_vTmp;
-  auto& vTmpTmp = petscWrap->m_vTmpTmp;
-  auto& vdTmp = petscWrap->m_vdTmp;
-  auto& vd2Tmp = petscWrap->m_vd2Tmp;
-  auto& vd3Tmp = petscWrap->m_vd3Tmp;
-  auto& colTmp = petscWrap->m_colTmp;
+  auto [vd2ASplitVec, vd2BSplitVec] = std::invoke(
+    [&stencilSize, &myd2StenGrid]() -> PairOfOptionalVectors
+    {
+      if (myd2StenGrid.has_value()) {
+        return {std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0)};
+      }
 
-  auto const netWidth = static_cast<PetscInt>(std::floor(stencilWidth / 2));
+      return {std::nullopt, std::nullopt};
+    });
+
+  auto [vd3ASplitVec, vd3BSplitVec] = std::invoke(
+    [&stencilSize, &myd3StenGrid]() -> PairOfOptionalVectors
+    {
+      if (myd3StenGrid.has_value()) {
+        return {std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0)};
+      }
+
+      return {std::nullopt, std::nullopt};
+    });
 
   if (info->bx == DM_BOUNDARY_GHOSTED) {
-    FillGhostCells1d(petscWrap->m_da, petscWrap->m_info);
+    FillGhostCells1d(*info, aY);
   }
+
+  PetscCall(MatZeroEntries(precondMat));
+
+  PetscAssert(info->st == DMDA_STENCIL_STAR,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONGSTATE,
+    "This function implementation currently assumes the use of DMDA_STENCIL_STAR");
 
   // Iterate over interior points and assemble Jacobian entries
 
   for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
+    std::copy_n(&aY[i * info->dof], info->dof, ayVec.begin());
+    std::copy_n(&aYdot[i * info->dof], info->dof, ayDotVec.begin());
+
+    // Compute first-order derivative stencil contributions
+    std::fill(indx.begin(), indx.end(), 0);
+
     for (PetscInt field = 0; field < info->dof; ++field) {
-      inTmp[field] = aY[i * info->dof + field];
-      dTime[field] = aYdot[i * info->dof + field];
-    }
-
-    // Compute first derivative stencil contributions if available
-    if (myd1StenGrid.has_value()) {
-      std::fill(indx.begin(), indx.end(), 0);
-
-      for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-        for (PetscInt field = 0; field < info->dof; ++field) {
-          // First derivative in x-direction
-          indx[field] += myd1StenGrid->at(pos) * aY[(i - netWidth + pos) * info->dof + field];
-        }
+      for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+        // First derivative in x-direction
+        indx[field] += myd1StenGrid.at(pos) * aY[(i - info->sw + pos) * info->dof + field];
       }
     }
 
-    // Compute second derivative stencil contributions if available
+    // Compute second-order derivative stencil contributions if available
     if (myd2StenGrid.has_value()) {
       std::fill(ind2x->begin(), ind2x->end(), 0);
 
-      for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-        for (PetscInt field = 0; field < info->dof; ++field) {
+      for (PetscInt field = 0; field < info->dof; ++field) {
+        for (PetscInt pos = 0; pos < stencilSize; ++pos) {
           // Second derivative in x direction
-          ind2x->at(field) += myd2StenGrid->at(pos) * aY[(i - netWidth + pos) * info->dof + field];
+          ind2x->at(field) += myd2StenGrid->at(pos) * aY[(i - info->sw + pos) * info->dof + field];
         }
       }
     }
 
-    if (myd3StenGrid.has_value() and ind3x.has_value()) {
+    if (myd3StenGrid.has_value()) {
       std::fill(ind3x->begin(), ind3x->end(), 0);
 
-      for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-        for (PetscInt field = 0; field < info->dof; ++field) {
+      for (PetscInt field = 0; field < info->dof; ++field) {
+        for (PetscInt pos = 0; pos < stencilSize; ++pos) {
           // Third derivative in x direction
-          ind3x->at(field) += myd3StenGrid->at(pos) * aY[(i - netWidth + pos) * info->dof + field];
+          ind3x->at(field) += myd3StenGrid->at(pos) * aY[(i - info->sw + pos) * info->dof + field];
         }
       }
     }
 
-    // Set row index for current point
-    rowTmp.i = i;
-
     // Loop over component row field components
-    for (std::size_t compRow = 0; compRow < numFields; ++compRow) {
-      rowTmp.c = compRow;
+    for (PetscInt compRow = 0; compRow < info->dof; ++compRow) {
+      rowSten = {.k = 0, .j = 0, .i = i, .c = compRow};
 
       // Loop over component column field components
-      for (std::size_t compCol = 0; compCol < numFields; ++compCol) {
-        std::fill(vTmp.begin(), vTmp.end(), 0);
+      for (PetscInt compCol = 0; compCol < info->dof; ++compCol) {
+        // Compute off-diagonal Jacobian contributions from spatial stencil
+        for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+          colStenVec[pos] = {.k = 0, .j = 0, .i = i - info->sw + pos, .c = compCol};
+        }
 
-        petscWrap->BaseClass::m_myPDE->JacLHSOpAsplit(inTmp,
-          dTime,
+        std::fill(vVec.begin(), vVec.end(), 0);
+
+        // Add time derivative shift to diagonal
+        if (compRow == compCol) {
+          vVec[info->sw] += shift;
+        }
+
+        // Compute diagonal Jacobian contribution
+        pwrap->Base::m_myPDE->JacLHSOpAsplit(ayVec,
+          ayDotVec,
           indx,
           std::nullopt,
           std::nullopt,
@@ -1782,24 +1265,36 @@ auto PetscWrap<PDEOptions>::FormIJacobianLocal1d(DMDALocalInfo* info,
           ind3x,
           std::nullopt,
           std::nullopt,
-          vTmpTmp,
+          vdASplitVec,
           compRow,
           compCol,
-          0);
+          1);
 
-        for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-          vTmp[pos] += vTmpTmp[pos];
+        pwrap->Base::m_myPDE->JacLHSOpBsplit(ayVec,
+          ayDotVec,
+          indx,
+          std::nullopt,
+          std::nullopt,
+          ind2x,
+          std::nullopt,
+          std::nullopt,
+          ind3x,
+          std::nullopt,
+          std::nullopt,
+          vdBSplitVec,
+          compRow,
+          compCol,
+          1);
+
+        // Compute off-diagonal Jacobian contributions from spatial stencil
+        for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+          vVec[pos] += myd1StenGrid.at(pos) * (vdASplitVec[pos] + vdBSplitVec[pos]);
         }
 
-        // Add time derivative shift to diagonal
-        if (compRow == compCol) {
-          vTmp[netWidth] += shift;
-        }
-
-        // Compute diagonal Jacobian contribution
-        if (myd1StenGrid.has_value()) {
-          petscWrap->BaseClass::m_myPDE->JacLHSOpAsplit(inTmp,
-            dTime,
+        // Compute second-order derivative contributions if available
+        if (myd2StenGrid.has_value()) {
+          pwrap->Base::m_myPDE->JacLHSOpAsplit(ayVec,
+            ayDotVec,
             indx,
             std::nullopt,
             std::nullopt,
@@ -1809,44 +1304,13 @@ auto PetscWrap<PDEOptions>::FormIJacobianLocal1d(DMDALocalInfo* info,
             ind3x,
             std::nullopt,
             std::nullopt,
-            vdTmp,
-            compRow,
-            compCol,
-            1);
-
-          // Compute off-diagonal Jacobian contributions from spatial stencil
-          for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-            vTmp[pos] += myd1StenGrid->at(pos) * vTmpTmp[pos];
-          }
-        }
-
-        // Compute second derivative contributions if available
-        if (myd2StenGrid.has_value() and ind2x.has_value()) {
-          petscWrap->BaseClass::m_myPDE->JacLHSOpAsplit(inTmp,
-            dTime,
-            indx,
-            std::nullopt,
-            std::nullopt,
-            ind2x,
-            std::nullopt,
-            std::nullopt,
-            ind3x,
-            std::nullopt,
-            std::nullopt,
-            vd2Tmp.value(),
+            vd2ASplitVec.value(),
             compRow,
             compCol,
             2);
 
-          for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-            vTmp[pos] += myd2StenGrid->at(pos) * vd2Tmp->at(pos);
-          }
-        }
-
-        // Compute third derivative contributions if available
-        if (myd3StenGrid.has_value() and ind3x.has_value()) {
-          petscWrap->BaseClass::m_myPDE->JacLHSOpAsplit(inTmp,
-            dTime,
+          pwrap->Base::m_myPDE->JacLHSOpBsplit(ayVec,
+            ayDotVec,
             indx,
             std::nullopt,
             std::nullopt,
@@ -1856,23 +1320,57 @@ auto PetscWrap<PDEOptions>::FormIJacobianLocal1d(DMDALocalInfo* info,
             ind3x,
             std::nullopt,
             std::nullopt,
-            vd3Tmp.value(),
+            vd2BSplitVec.value(),
+            compRow,
+            compCol,
+            2);
+
+          for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+            vVec[pos] += myd2StenGrid->at(pos) * (vd2ASplitVec->at(pos) + vd2BSplitVec->at(pos));
+          }
+        }
+
+        // Compute third-order derivative contributions if available
+        if (myd3StenGrid.has_value()) {
+          pwrap->Base::m_myPDE->JacLHSOpAsplit(ayVec,
+            ayDotVec,
+            indx,
+            std::nullopt,
+            std::nullopt,
+            ind2x,
+            std::nullopt,
+            std::nullopt,
+            ind3x,
+            std::nullopt,
+            std::nullopt,
+            vd3ASplitVec.value(),
             compRow,
             compCol,
             3);
 
-          for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-            vTmp[pos] += myd3StenGrid->at(pos) * vd3Tmp->at(pos);
+          pwrap->Base::m_myPDE->JacLHSOpBsplit(ayVec,
+            ayDotVec,
+            indx,
+            std::nullopt,
+            std::nullopt,
+            ind2x,
+            std::nullopt,
+            std::nullopt,
+            ind3x,
+            std::nullopt,
+            std::nullopt,
+            vd3BSplitVec.value(),
+            compRow,
+            compCol,
+            3);
+
+          for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+            vVec[pos] += myd3StenGrid->at(pos) * (vd3ASplitVec->at(pos) + vd3BSplitVec->at(pos));
           }
         }
 
-        // Compute off-diagonal Jacobian contributions from spatial stencil
-        for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-          colTmp[pos].i = i - netWidth + pos;
-          colTmp[pos].c = compCol;
-        }
-
-        PetscCall(MatSetValuesStencil(precondMat, 1, &rowTmp, stencilWidth, colTmp.data(), vTmp.data(), INSERT_VALUES));
+        PetscCall(
+          MatSetValuesStencil(precondMat, 1, &rowSten, stencilSize, colStenVec.data(), vVec.data(), INSERT_VALUES));
       }
     }
   }
@@ -1885,7 +1383,246 @@ auto PetscWrap<PDEOptions>::FormIJacobianLocal1d(DMDALocalInfo* info,
     PetscCall(MatAssemblyEnd(asmMat, MAT_FINAL_ASSEMBLY));
   }
 
-  return 0;
+  pwrap->m_user.iJacobianCalled = PETSC_TRUE;
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////// 2D /////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template<std::semiregular PDEOptions>
+auto PetscWrap<PDEOptions>::FormRHSFunctionLocal2d(
+  DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal** aY, PetscReal** aG, void* pwp) -> PetscErrorCode
+{
+  PetscFunctionBeginUser;
+
+  auto* const pwrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
+
+  PetscCheck(info and info->dim == 2,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONG,
+    "Wrong number of dimensions or DMDALocalInfo has not been initialized");
+  PetscCheck(pwrap->Base::m_myPDE != nullptr, PETSC_COMM_WORLD, PETSC_ERR_ARG_NULL, "The PDE system has not been set");
+  PetscCheck(std::ssize(pwrap->m_methodProps.fields) == info->dof,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_INCOMP,
+    "The number of fields and dof must be equal");
+
+  auto aYvec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto aGvec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+
+  for (PetscInt j = info->ys; j < info->ys + info->ym; ++j) {
+    for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
+      std::copy_n(&aY[j][i * info->dof], info->dof, aYvec.begin());
+
+      for (PetscInt field = 0; field < info->dof; ++field) {
+        pwrap->Base::m_myPDE->RHS(std::as_const(aYvec), aGvec, field);
+      }
+
+      std::copy_n(aGvec.begin(), info->dof, &aG[j][i * info->dof]);
+    }
+  }
+
+  pwrap->m_user.rhsFuncCalled = PETSC_TRUE;
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+template<std::semiregular PDEOptions>
+auto PetscWrap<PDEOptions>::FormRHSJacobianLocal2d(
+  DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal** aY, Mat asmMat, Mat precondMat, void* pwp)
+  -> PetscErrorCode
+{
+  PetscFunctionBeginUser;
+
+  auto* const pwrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
+
+  PetscCheck(info and info->dim == 2,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONG,
+    "Wrong number of dimensions or DMDALocalInfo has not been initialized");
+  PetscCheck(pwrap->Base::m_myPDE != nullptr, PETSC_COMM_WORLD, PETSC_ERR_ARG_NULL, "The PDE system has not been set");
+  PetscCheck(std::ssize(pwrap->m_methodProps.fields) == info->dof,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_INCOMP,
+    "The number of fields and dof must be equal");
+
+  auto aYvec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto outVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto colStenVec = std::vector<MatStencil>(static_cast<std::size_t>(info->dof), MatStencil {});
+  auto rowSten = MatStencil {};
+
+  for (PetscInt j = info->ys; j < info->ys + info->ym; ++j) {
+    for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
+      std::copy_n(&aY[j][i * info->dof], info->dof, aYvec.begin());
+
+      for (PetscInt field = 0; field < info->dof; ++field) {
+        pwrap->Base::m_myPDE->JacRHS(std::as_const(aYvec), outVec, field);
+      }
+
+      for (PetscInt field = 0; field < info->dof; ++field) {
+        colStenVec[field] = {.k = 0, .j = j, .i = i, .c = field};
+      }
+
+      for (PetscInt field = 0; field < info->dof; ++field) {
+        rowSten = {.k = 0, .j = j, .i = i, .c = field};
+
+        PetscCall(
+          MatSetValuesStencil(precondMat, 1, &rowSten, info->dof, colStenVec.data(), outVec.data(), INSERT_VALUES));
+      }
+    }
+  }
+
+  PetscCall(MatAssemblyBegin(precondMat, MAT_FINAL_ASSEMBLY));
+  PetscCall(MatAssemblyEnd(precondMat, MAT_FINAL_ASSEMBLY));
+
+  if (asmMat != precondMat) {
+    PetscCall(MatAssemblyBegin(asmMat, MAT_FINAL_ASSEMBLY));
+    PetscCall(MatAssemblyEnd(asmMat, MAT_FINAL_ASSEMBLY));
+  }
+
+  pwrap->m_user.rhsJacobianCalled = PETSC_TRUE;
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+template<std::semiregular PDEOptions>
+auto PetscWrap<PDEOptions>::FormIFunctionLocal2d(
+  DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal** aY, PetscReal** aYdot, PetscReal** aF, void* pwp)
+  -> PetscErrorCode
+{
+  PetscFunctionBeginUser;
+
+  auto* const pwrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
+
+  PetscCheck(info and info->dim == 2,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONG,
+    "Wrong number of dimensions or DMDALocalInfo has not been initialized");
+  PetscCheck(pwrap->Base::m_myPDE != nullptr, PETSC_COMM_WORLD, PETSC_ERR_ARG_NULL, "The PDE system has not been set");
+  PetscCheck(std::ssize(pwrap->m_methodProps.fields) == info->dof,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_INCOMP,
+    "The number of fields and dof must be equal");
+
+  // std::vectors for aY, aYdot, and aF
+
+  auto ayVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto ayDotVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto afASplitVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto afBSplitVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+
+  // std::vectors for stencil grid weights
+
+  auto const& myd1StenGrid = pwrap->m_myStencilGridd;
+  auto const& myd2StenGrid = pwrap->m_myStencilGridd2;
+  auto const& myd3StenGrid = pwrap->m_myStencilGridd3;
+
+  // std::vectors for storing stencil grid contributions
+
+  auto indx = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto indy = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+
+  auto [ind2x, ind2y] = std::invoke(
+    [&info, &myd2StenGrid]() -> std::pair<std::optional<std::vector<PetscReal>>, std::optional<std::vector<PetscReal>>>
+    {
+      if (myd2StenGrid.has_value()) {
+        return std::make_pair(std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0));
+      }
+
+      return std::make_pair(std::nullopt, std::nullopt);
+    });
+
+  auto [ind3x, ind3y] = std::invoke(
+    [&info, &myd3StenGrid]() -> std::pair<std::optional<std::vector<PetscReal>>, std::optional<std::vector<PetscReal>>>
+    {
+      if (myd3StenGrid.has_value()) {
+        return std::make_pair(std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0));
+      }
+
+      return std::make_pair(std::nullopt, std::nullopt);
+    });
+
+  // We're only interested in the per-axis neighbours of the current grid point
+  auto const stencilSize = (2 * info->sw) + 1;
+
+  // Fill ghost cells at domain boundaries using nearest interior values
+  if (info->bx == DM_BOUNDARY_GHOSTED and info->by == DM_BOUNDARY_GHOSTED) {
+    FillGhostCells2d(*info, aY);
+  }
+
+  PetscAssert(info->st == DMDA_STENCIL_STAR,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONGSTATE,
+    "This function implementation currently assumes the use of DMDA_STENCIL_STAR");
+
+  for (PetscInt j = info->ys; j < info->ys + info->ym; ++j) {
+    for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
+      std::copy_n(&aY[j][i * info->dof], info->dof, ayVec.begin());
+      std::copy_n(&aYdot[j][i * info->dof], info->dof, ayDotVec.begin());
+
+      std::fill(indx.begin(), indx.end(), 0);
+      std::fill(indy.begin(), indy.end(), 0);
+
+      for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+        for (PetscInt field = 0; field < info->dof; ++field) {
+          // First derivative in x direction
+          indx[field] += myd1StenGrid.at(pos) * aY[j][(i - info->sw + pos) * info->dof + field];
+
+          // First derivative in y direction
+          indy[field] += myd1StenGrid.at(pos) * aY[j - info->sw + pos][i * info->dof + field];
+        }
+      }
+
+      if (myd2StenGrid.has_value()) {
+        std::fill(ind2x->begin(), ind2x->end(), 0);
+        std::fill(ind2y->begin(), ind2y->end(), 0);
+
+        for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+          for (PetscInt field = 0; field < info->dof; ++field) {
+            // Second derivative in x direction
+            ind2x->at(field) += myd2StenGrid->at(pos) * aY[j][(i - info->sw + pos) * info->dof + field];
+
+            // Second derivative in y direction
+            ind2y->at(field) += myd2StenGrid->at(pos) * aY[j - info->sw + pos][i * info->dof + field];
+          }
+        }
+      }
+
+      if (myd3StenGrid.has_value()) {
+        std::fill(ind3x->begin(), ind3x->end(), 0);
+        std::fill(ind3y->begin(), ind3y->end(), 0);
+
+        for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+          for (PetscInt field = 0; field < info->dof; ++field) {
+            // Third derivative in x direction
+            ind3x->at(field) += myd3StenGrid->at(pos) * aY[j][(i - info->sw + pos) * info->dof + field];
+
+            // Third derivative in y direction
+            ind3y->at(field) += myd3StenGrid->at(pos) * aY[j - info->sw + pos][i * info->dof + field];
+          }
+        }
+      }
+
+      pwrap->Base::m_myPDE->LHSOpAsplit(
+        ayVec, ayDotVec, indx, indy, std::nullopt, ind2x, ind2y, std::nullopt, ind3x, ind3y, std::nullopt, afASplitVec);
+
+      pwrap->Base::m_myPDE->LHSOpBsplit(
+        ayVec, ayDotVec, indx, indy, std::nullopt, ind2x, ind2y, std::nullopt, ind3x, ind3y, std::nullopt, afBSplitVec);
+
+      for (PetscInt field = 0; field < info->dof; ++field) {
+        aF[j][i * info->dof + field] = afASplitVec[field] + afBSplitVec[field];
+      }
+    }
+  }
+
+  pwrap->m_user.iFuncCalled = PETSC_TRUE;
+
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 template<std::semiregular PDEOptions>
@@ -1898,207 +1635,169 @@ auto PetscWrap<PDEOptions>::FormIJacobianLocal2d(DMDALocalInfo* info,
   Mat precondMat,
   void* pwp) -> PetscErrorCode
 {
-  assert(info and info->dim == 2);
+  PetscFunctionBeginUser;
 
-  auto* petscWrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
-  petscWrap->m_user.iJacobianCalled = PETSC_TRUE;
+  auto* const pwrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
 
-  assert(!petscWrap->m_methodProps.fields.empty() and "Fields have not been set");
-  assert(petscWrap->BaseClass::m_myPDE != nullptr && "PDE has not been set");
+  PetscCheck(info and info->dim == 2,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONG,
+    "Wrong number of dimensions or DMDALocalInfo has not been initialized");
+  PetscCheck(pwrap->Base::m_myPDE != nullptr, PETSC_COMM_WORLD, PETSC_ERR_ARG_NULL, "The PDE system has not been set");
+  PetscCheck(std::ssize(pwrap->m_methodProps.fields) == info->dof,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_INCOMP,
+    "The number of fields and dof must be equal");
 
-  auto const& stenData = petscWrap->m_myStencilData;
-  auto const numFields = std::size(petscWrap->m_methodProps.fields);
+  // std::vectors for aY, and aYdot
 
-  assert(std::cmp_equal(numFields, info->dof));
+  auto ayVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto ayDotVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
 
-  // If the vectors aren't the right size, resize them once
-  if (petscWrap->m_inTmp.size() != numFields) {
-    petscWrap->m_inTmp.resize(numFields);
-  }
+  // std::vectors for stencil grid weights
 
-  // Set up time derivative container
+  auto const& myd1StenGrid = pwrap->m_myStencilGridd;
+  auto const& myd2StenGrid = pwrap->m_myStencilGridd2;
+  auto const& myd3StenGrid = pwrap->m_myStencilGridd3;
 
-  if (petscWrap->m_dTime.size() != numFields) {
-    petscWrap->m_dTime.resize(numFields);
-  }
+  // std::vectors for storing stencil grid contributions
 
-  // Set up first-order spatial derivative containers
+  auto [indx, indy] = std::make_pair(std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+    std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0));
 
-  if (petscWrap->m_indx.size() != numFields) {
-    petscWrap->m_indx.resize(numFields);
-  }
+  using PairOfOptionalVectors = std::pair<std::optional<std::vector<PetscReal>>, std::optional<std::vector<PetscReal>>>;
 
-  if (petscWrap->m_indy.size() != numFields) {
-    petscWrap->m_indy.resize(numFields);
-  }
-
-  auto const stencilWidth = std::invoke(
-    [&stenData, &info]
+  auto [ind2x, ind2y] = std::invoke(
+    [&info, &myd2StenGrid]() -> PairOfOptionalVectors
     {
-      if (info->dim == 1) {
-        return stenData[2];
+      if (myd2StenGrid.has_value()) {
+        return {std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0)};
       }
 
-      if (info->dim == 2) {
-        return stenData[3];
-      }
-
-      return stenData[4];
+      return {std::nullopt, std::nullopt};
     });
 
-  if (std::cmp_not_equal(petscWrap->m_vTmp.size(), stencilWidth)) {
-    petscWrap->m_vTmp.resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_vdTmp.size(), stencilWidth)) {
-    petscWrap->m_vdTmp.resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_vd2Tmp->size(), stencilWidth)) {
-    petscWrap->m_vd2Tmp->resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_vd3Tmp->size(), stencilWidth)) {
-    petscWrap->m_vd3Tmp->resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_vTmpTmp.size(), stencilWidth)) {
-    petscWrap->m_vTmpTmp.resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_colTmp.size(), stencilWidth)) {
-    petscWrap->m_colTmp.resize(stencilWidth);
-  }
+  auto [ind3x, ind3y] = std::invoke(
+    [&info, &myd3StenGrid]() -> PairOfOptionalVectors
+    {
+      if (myd3StenGrid.has_value()) {
+        return {std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0)};
+      }
 
-  // Set up second-order spatial derivative containers
+      return {std::nullopt, std::nullopt};
+    });
 
-  if (petscWrap->m_myStencilGridd2.has_value()) {
-    if (!petscWrap->m_ind2x.has_value()) {
-      petscWrap->m_ind2x = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind2x->size() != numFields) {
-      petscWrap->m_ind2x->resize(numFields);
-    }
-  }
+  // We're only interested in the per-axis neighbours of the current grid point
+  auto const stencilSize = (2 * info->sw) + 1;
 
-  if (petscWrap->m_myStencilGridd2.has_value()) {
-    if (!petscWrap->m_ind2y.has_value()) {
-      petscWrap->m_ind2y = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind2y->size() != numFields) {
-      petscWrap->m_ind2y->resize(numFields);
-    }
-  }
+  auto rowSten = MatStencil {};
+  auto colStenVec = std::vector<MatStencil>(static_cast<std::size_t>(stencilSize), MatStencil {});
 
-  // Set up third-order spatial derivative containers
+  auto vVec = std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0);
 
-  if (petscWrap->m_myStencilGridd3.has_value()) {
-    if (!petscWrap->m_ind3x.has_value()) {
-      petscWrap->m_ind3x = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind3x->size() != numFields) {
-      petscWrap->m_ind3x->resize(numFields);
-    }
-  }
+  auto vTmp = std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0);
 
-  if (petscWrap->m_myStencilGridd3.has_value()) {
-    if (!petscWrap->m_ind3y.has_value()) {
-      petscWrap->m_ind3y = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind3y->size() != numFields) {
-      petscWrap->m_ind3y->resize(numFields);
-    }
-  }
+  auto [vdASplitVec, vdBSplitVec] = std::make_pair(std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0),
+    std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0));
 
-  auto& rowTmp = petscWrap->m_rowTmp;
-  auto& inTmp = petscWrap->m_inTmp;
-  auto& dTime = petscWrap->m_dTime;
+  auto [vd2ASplitVec, vd2BSplitVec] = std::invoke(
+    [&stencilSize, &myd2StenGrid]() -> PairOfOptionalVectors
+    {
+      if (myd2StenGrid.has_value()) {
+        return {std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0)};
+      }
 
-  auto const& myd1StenGrid = petscWrap->m_myStencilGridd;
-  auto const& myd2StenGrid = petscWrap->m_myStencilGridd2;
-  auto const& myd3StenGrid = petscWrap->m_myStencilGridd3;
+      return {std::nullopt, std::nullopt};
+    });
 
-  auto& indx = petscWrap->m_indx;
-  auto& ind2x = petscWrap->m_ind2x;
-  auto& ind3x = petscWrap->m_ind3x;
+  auto [vd3ASplitVec, vd3BSplitVec] = std::invoke(
+    [&stencilSize, &myd3StenGrid]() -> PairOfOptionalVectors
+    {
+      if (myd3StenGrid.has_value()) {
+        return {std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0)};
+      }
 
-  auto& indy = petscWrap->m_indy;
-  auto& ind2y = petscWrap->m_ind2y;
-  auto& ind3y = petscWrap->m_ind3y;
-
-  auto& vTmp = petscWrap->m_vTmp;
-  auto& vdTmp = petscWrap->m_vdTmp;
-  auto& vd2Tmp = petscWrap->m_vd2Tmp;
-  auto& vd3Tmp = petscWrap->m_vd3Tmp;
-  auto& vTmpTmp = petscWrap->m_vTmpTmp;
-  auto& colTmp = petscWrap->m_colTmp;
-
-  auto const netWidth = static_cast<PetscInt>(std::floor(stencilWidth / 2));
+      return {std::nullopt, std::nullopt};
+    });
 
   if (info->bx == DM_BOUNDARY_GHOSTED and info->by == DM_BOUNDARY_GHOSTED) {
-    FillGhostCells2d(petscWrap->m_da, petscWrap->m_info);
+    FillGhostCells2d(*info, aY);
   }
+
+  PetscAssert(info->st == DMDA_STENCIL_STAR,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONGSTATE,
+    "This function implementation currently assumes the use of DMDA_STENCIL_STAR");
+
+  PetscCall(MatZeroEntries(precondMat));
 
   // Assemble Jacobian for 2D domain
   for (PetscInt j = info->ys; j < info->ys + info->ym; ++j) {
-    rowTmp.j = j;
-
     for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
-      for (PetscInt field = 0; field < info->dof; ++field) {
-        inTmp[field] = aY[j][i * info->dof + field];
-        dTime[field] = aYdot[j][i * info->dof + field];
-      }
+      std::copy_n(&aY[j][i * info->dof], info->dof, ayVec.begin());
+      std::copy_n(&aYdot[j][i * info->dof], info->dof, ayDotVec.begin());
 
       // Compute stencil contributions from spatial derivatives
-      if (myd1StenGrid.has_value()) {
-        std::fill(indx.begin(), indx.end(), 0);
+      std::fill(indx.begin(), indx.end(), 0);
+      std::fill(indy.begin(), indy.end(), 0);
 
-        for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-          for (PetscInt field = 0; field < info->dof; ++field) {
-            // First derivative in x-direction
-            indx[field] += myd1StenGrid->at(pos) * aY[j][(i - netWidth + pos) * info->dof + field];
+      for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+        for (PetscInt field = 0; field < info->dof; ++field) {
+          // First derivative in x-direction
+          indx[field] += myd1StenGrid.at(pos) * aY[j][(i - info->sw + pos) * info->dof + field];
 
-            // First derivative in y-direction
-            indy[field] += myd1StenGrid->at(pos) * aY[j - netWidth + pos][i * info->dof + field];
-          }
+          // First derivative in y-direction
+          indy[field] += myd1StenGrid.at(pos) * aY[j - info->sw + pos][i * info->dof + field];
         }
       }
 
       if (myd2StenGrid.has_value()) {
         std::fill(ind2x->begin(), ind2x->end(), 0);
+        std::fill(ind2y->begin(), ind2y->end(), 0);
 
-        for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
+        for (PetscInt pos = 0; pos < stencilSize; ++pos) {
           for (PetscInt field = 0; field < info->dof; ++field) {
             // Second derivative in x-direction
-            ind2x->at(field) += myd2StenGrid->at(pos) * aY[j][(i - netWidth + pos) * info->dof + field];
+            ind2x->at(field) += myd2StenGrid->at(pos) * aY[j][(i - info->sw + pos) * info->dof + field];
 
             // Second derivative in y-direction
-            ind2y->at(field) += myd2StenGrid->at(pos) * aY[j - netWidth + pos][i * info->dof + field];
+            ind2y->at(field) += myd2StenGrid->at(pos) * aY[j - info->sw + pos][i * info->dof + field];
           }
         }
       }
 
-      if (myd3StenGrid.has_value() and ind3x.has_value()) {
+      if (myd3StenGrid.has_value()) {
         std::fill(ind3x->begin(), ind3x->end(), 0);
+        std::fill(ind3y->begin(), ind3y->end(), 0);
 
-        for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
+        for (PetscInt pos = 0; pos < stencilSize; ++pos) {
           for (PetscInt field = 0; field < info->dof; ++field) {
             // Third derivative in x direction
-            ind3x->at(field) += myd3StenGrid->at(pos) * aY[j][(i - netWidth + pos) * info->dof + field];
+            ind3x->at(field) += myd3StenGrid->at(pos) * aY[j][(i - info->sw + pos) * info->dof + field];
 
             // Third derivative in y-direction
-            ind3y->at(field) += myd3StenGrid->at(pos) * aY[j - netWidth + pos][i * info->dof + field];
+            ind3y->at(field) += myd3StenGrid->at(pos) * aY[j - info->sw + pos][i * info->dof + field];
           }
         }
       }
 
-      // Set row index for current 2D point
-      rowTmp.i = i;
-
       // Assemble Jacobian entries for all field combinations
-      for (std::size_t compRow = 0; compRow < numFields; ++compRow) {
-        rowTmp.c = compRow;
+      for (PetscInt compRow = 0; compRow < info->dof; ++compRow) {
+        rowSten = {.k = 0, .j = j, .i = i, .c = compRow};
 
-        for (std::size_t compCol = 0; compCol < numFields; ++compCol) {
-          std::fill(vTmp.begin(), vTmp.end(), 0);
+        for (PetscInt compCol = 0; compCol < info->dof; ++compCol) {
+          for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+            colStenVec[pos] = {.k = 0, .j = j - info->sw + pos, .i = i - info->sw + pos, .c = compCol};
+          }
 
-          petscWrap->BaseClass::m_myPDE->JacLHSOpAsplit(inTmp,
-            dTime,
+          std::fill(vVec.begin(), vVec.end(), 0.0);
+
+          pwrap->Base::m_myPDE->JacLHSOpBsplit(ayVec,
+            ayDotVec,
             indx,
             indy,
             std::nullopt,
@@ -2108,47 +1807,57 @@ auto PetscWrap<PDEOptions>::FormIJacobianLocal2d(DMDALocalInfo* info,
             ind3x,
             ind3y,
             std::nullopt,
-            vTmpTmp,
+            vTmp,
             compRow,
             compCol,
             0);
 
-          for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-            vTmp[pos] += vTmpTmp[pos];
-          }
-
           if (compRow == compCol) {
-            vTmp[netWidth] += shift;
+            vVec[info->sw] += shift;
           }
 
           // Compute diagonal term (time derivative + LHS operator)
-          if (myd1StenGrid.has_value()) {
-            petscWrap->BaseClass::m_myPDE->JacLHSOpAsplit(inTmp,
-              dTime,
-              indx,
-              indy,
-              std::nullopt,
-              ind2x,
-              ind2y,
-              std::nullopt,
-              ind3x,
-              ind3y,
-              std::nullopt,
-              vdTmp,
-              compRow,
-              compCol,
-              1);
+          pwrap->Base::m_myPDE->JacLHSOpAsplit(ayVec,
+            ayDotVec,
+            indx,
+            indy,
+            std::nullopt,
+            ind2x,
+            ind2y,
+            std::nullopt,
+            ind3x,
+            ind3y,
+            std::nullopt,
+            vdASplitVec,
+            compRow,
+            compCol,
+            1);
 
-            // Compute stencil contributions from first derivative
-            for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-              vTmp[pos] += myd1StenGrid->at(pos) * vdTmp[pos];
-            }
+          pwrap->Base::m_myPDE->JacLHSOpBsplit(ayVec,
+            ayDotVec,
+            indx,
+            indy,
+            std::nullopt,
+            ind2x,
+            ind2y,
+            std::nullopt,
+            ind3x,
+            ind3y,
+            std::nullopt,
+            vdBSplitVec,
+            compRow,
+            compCol,
+            1);
+
+          // Compute stencil contributions from first derivative
+          for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+            vVec[pos] += myd1StenGrid.at(pos) * (vdASplitVec[pos] + vdBSplitVec[pos]);
           }
 
           // Compute second derivative contributions (if available)
           if (myd2StenGrid.has_value()) {
-            petscWrap->BaseClass::m_myPDE->JacLHSOpAsplit(inTmp,
-              dTime,
+            pwrap->Base::m_myPDE->JacLHSOpAsplit(ayVec,
+              ayDotVec,
               indx,
               indy,
               std::nullopt,
@@ -2158,21 +1867,37 @@ auto PetscWrap<PDEOptions>::FormIJacobianLocal2d(DMDALocalInfo* info,
               ind3x,
               ind3y,
               std::nullopt,
-              vd2Tmp.value(),
+              vd2ASplitVec.value(),
+              compRow,
+              compCol,
+              2);
+
+            pwrap->Base::m_myPDE->JacLHSOpBsplit(ayVec,
+              ayDotVec,
+              indx,
+              indy,
+              std::nullopt,
+              ind2x,
+              ind2y,
+              std::nullopt,
+              ind3x,
+              ind3y,
+              std::nullopt,
+              vd2BSplitVec.value(),
               compRow,
               compCol,
               2);
 
             // Compute off-diagonal Jacobian contributions from spatial stencil
-            for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-              vTmp[pos] += myd2StenGrid->at(pos) * vd2Tmp->at(pos);
+            for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+              vVec[pos] += myd2StenGrid->at(pos) * (vd2ASplitVec->at(pos) + vd2BSplitVec->at(pos));
             }
           }
 
           // Compute third derivative contributions (if available)
           if (myd3StenGrid.has_value()) {
-            petscWrap->BaseClass::m_myPDE->JacLHSOpAsplit(inTmp,
-              dTime,
+            pwrap->Base::m_myPDE->JacLHSOpAsplit(ayVec,
+              ayDotVec,
               indx,
               indy,
               std::nullopt,
@@ -2182,26 +1907,36 @@ auto PetscWrap<PDEOptions>::FormIJacobianLocal2d(DMDALocalInfo* info,
               ind3x,
               ind3y,
               std::nullopt,
-              vd3Tmp.value(),
+              vd3ASplitVec.value(),
+              compRow,
+              compCol,
+              3);
+
+            pwrap->Base::m_myPDE->JacLHSOpBsplit(ayVec,
+              ayDotVec,
+              indx,
+              indy,
+              std::nullopt,
+              ind2x,
+              ind2y,
+              std::nullopt,
+              ind3x,
+              ind3y,
+              std::nullopt,
+              vd3BSplitVec.value(),
               compRow,
               compCol,
               3);
 
             // Compute off-diagonal Jacobian contributions from spatial stencil
-            for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-              vTmp[pos] += myd3StenGrid->at(pos) * vd3Tmp->at(pos);
+            for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+              vVec[pos] += myd3StenGrid->at(pos) * (vd3ASplitVec->at(pos) + vd3BSplitVec->at(pos));
             }
-          }
-
-          for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-            colTmp[pos].i = i - netWidth + pos;
-            colTmp[pos].j = j;
-            colTmp[pos].c = compCol;
           }
 
           // Insert row of Jacobian into matrix
           PetscCall(
-            MatSetValuesStencil(precondMat, 1, &rowTmp, stencilWidth, colTmp.data(), vTmp.data(), INSERT_VALUES));
+            MatSetValuesStencil(precondMat, 1, &rowSten, stencilSize, colStenVec.data(), vVec.data(), INSERT_VALUES));
         }
       }
     }
@@ -2215,7 +1950,271 @@ auto PetscWrap<PDEOptions>::FormIJacobianLocal2d(DMDALocalInfo* info,
     PetscCall(MatAssemblyEnd(asmMat, MAT_FINAL_ASSEMBLY));
   }
 
-  return 0;
+  pwrap->m_user.iJacobianCalled = PETSC_TRUE;
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////// 3D /////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template<std::semiregular PDEOptions>
+auto PetscWrap<PDEOptions>::FormRHSFunctionLocal3d(
+  DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal*** aY, PetscReal*** aG, void* pwp) -> PetscErrorCode
+{
+  PetscFunctionBeginUser;
+
+  auto* const pwrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
+
+  PetscCheck(info and info->dim == 3,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONG,
+    "Wrong number of dimensions or DMDALocalInfo has not been initialized");
+  PetscCheck(pwrap->Base::m_myPDE != nullptr, PETSC_COMM_WORLD, PETSC_ERR_ARG_NULL, "The PDE system has not been set");
+  PetscCheck(std::ssize(pwrap->m_methodProps.fields) == info->dof,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_INCOMP,
+    "The number of fields and dof must be equal");
+
+  auto aYvec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto aGvec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+
+  for (PetscInt k = info->zs; k < info->zs + info->zm; ++k) {
+    for (PetscInt j = info->ys; j < info->ys + info->ym; ++j) {
+      for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
+        std::copy_n(&aY[k][j][i * info->dof], info->dof, aYvec.begin());
+
+        for (PetscInt field = 0; field < info->dof; ++field) {
+          pwrap->Base::m_myPDE->RHS(std::as_const(aYvec), aGvec, field);
+        }
+
+        std::copy_n(aGvec.begin(), info->dof, &aG[k][j][i * info->dof]);
+      }
+    }
+  }
+
+  pwrap->m_user.rhsFuncCalled = PETSC_TRUE;
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+template<std::semiregular PDEOptions>
+auto PetscWrap<PDEOptions>::FormRHSJacobianLocal3d(
+  DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal*** aY, Mat asmMat, Mat precondMat, void* pwp)
+  -> PetscErrorCode
+{
+  PetscFunctionBeginUser;
+
+  auto* const pwrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
+
+  PetscCheck(info and info->dim == 3,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONG,
+    "Wrong number of dimensions or DMDALocalInfo has not been initialized");
+  PetscCheck(pwrap->Base::m_myPDE != nullptr, PETSC_COMM_WORLD, PETSC_ERR_ARG_NULL, "The PDE system has not been set");
+  PetscCheck(std::ssize(pwrap->m_methodProps.fields) == info->dof,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_INCOMP,
+    "The number of fields and dof must be equal");
+
+  auto aYvec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto outVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto colStenVec = std::vector<MatStencil>(static_cast<std::size_t>(info->dof), MatStencil {});
+  auto rowSten = MatStencil {};
+
+  for (PetscInt k = info->zs; k < info->zs + info->zm; ++k) {
+    for (PetscInt j = info->ys; j < info->ys + info->ym; ++j) {
+      for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
+        std::copy_n(&aY[k][j][i * info->dof], info->dof, aYvec.begin());
+
+        for (PetscInt field = 0; field < info->dof; ++field) {
+          pwrap->Base::m_myPDE->JacRHS(std::as_const(aYvec), outVec, field);
+        }
+
+        for (PetscInt field = 0; field < info->dof; ++field) {
+          colStenVec[field] = {.k = k, .j = j, .i = i, .c = field};
+        }
+
+        for (PetscInt field = 0; field < info->dof; ++field) {
+          rowSten = {.k = k, .j = j, .i = i, .c = field};
+
+          PetscCall(
+            MatSetValuesStencil(precondMat, 1, &rowSten, info->dof, colStenVec.data(), outVec.data(), INSERT_VALUES));
+        }
+      }
+    }
+  }
+
+  PetscCall(MatAssemblyBegin(precondMat, MAT_FINAL_ASSEMBLY));
+  PetscCall(MatAssemblyEnd(precondMat, MAT_FINAL_ASSEMBLY));
+
+  if (asmMat != precondMat) {
+    PetscCall(MatAssemblyBegin(asmMat, MAT_FINAL_ASSEMBLY));
+    PetscCall(MatAssemblyEnd(asmMat, MAT_FINAL_ASSEMBLY));
+  }
+
+  pwrap->m_user.rhsJacobianCalled = PETSC_TRUE;
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+template<std::semiregular PDEOptions>
+auto PetscWrap<PDEOptions>::FormIFunctionLocal3d(
+  DMDALocalInfo* info, [[maybe_unused]] PetscReal time, PetscReal*** aY, PetscReal*** aYdot, PetscReal*** aF, void* pwp)
+  -> PetscErrorCode
+{
+  PetscFunctionBeginUser;
+
+  auto* const pwrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
+
+  PetscCheck(info and info->dim == 3,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONG,
+    "Wrong number of dimensions or DMDALocalInfo has not been initialized");
+  PetscCheck(pwrap->Base::m_myPDE != nullptr, PETSC_COMM_WORLD, PETSC_ERR_ARG_NULL, "The PDE system has not been set");
+  PetscCheck(std::ssize(pwrap->m_methodProps.fields) == info->dof,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_INCOMP,
+    "The number of fields and dof must be equal");
+
+  // std::vectors for aY, aYdot, and aF
+
+  auto ayVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto ayDotVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto afASplitVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto afBSplitVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+
+  // std::vectors for stencil grid weights
+
+  auto const& myd1StenGrid = pwrap->m_myStencilGridd;
+  auto const& myd2StenGrid = pwrap->m_myStencilGridd2;
+  auto const& myd3StenGrid = pwrap->m_myStencilGridd3;
+
+  // std::vectors for storing stencil grid contributions
+
+  auto indx = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto indy = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto indz = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+
+  using TripleOfVectors = std::tuple<std::optional<std::vector<PetscReal>>,
+    std::optional<std::vector<PetscReal>>,
+    std::optional<std::vector<PetscReal>>>;
+
+  auto [ind2x, ind2y, ind2z] = std::invoke(
+    [&info, &myd2StenGrid]() -> TripleOfVectors
+    {
+      if (myd2StenGrid.has_value()) {
+        return {std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0)};
+      }
+
+      return {std::nullopt, std::nullopt, std::nullopt};
+    });
+
+  auto [ind3x, ind3y, ind3z] = std::invoke(
+    [&info, &myd3StenGrid]() -> TripleOfVectors
+    {
+      if (myd3StenGrid.has_value()) {
+        return {std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0)};
+      }
+
+      return {std::nullopt, std::nullopt, std::nullopt};
+    });
+
+  // We're only interested in the per-axis neighbours of the current grid point
+  auto const stencilSize = (2 * info->sw) + 1;
+
+  // Fill ghost cells at domain boundaries using nearest interior values
+  if (info->bx == DM_BOUNDARY_GHOSTED and info->by == DM_BOUNDARY_GHOSTED and info->bz == DM_BOUNDARY_GHOSTED) {
+    FillGhostCells3d(*info, aY);
+  }
+
+  PetscAssert(info->st == DMDA_STENCIL_STAR,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONGSTATE,
+    "This function implementation currently assumes the use of DMDA_STENCIL_STAR");
+
+  for (PetscInt k = info->zs; k < info->zs + info->zm; ++k) {
+    for (PetscInt j = info->ys; j < info->ys + info->ym; ++j) {
+      for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
+        std::copy_n(&aY[k][j][i * info->dof], info->dof, ayVec.begin());
+        std::copy_n(&aYdot[k][j][i * info->dof], info->dof, ayDotVec.begin());
+
+        std::fill(indx.begin(), indx.end(), 0);
+        std::fill(indy.begin(), indy.end(), 0);
+        std::fill(indz.begin(), indz.end(), 0);
+
+        for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+          for (PetscInt field = 0; field < info->dof; ++field) {
+            // First derivative in x direction
+            indx[field] += myd1StenGrid.at(pos) * aY[k][j][(i - info->sw + pos) * info->dof + field];
+
+            // First derivative in y direction
+            indy[field] += myd1StenGrid.at(pos) * aY[k][j - info->sw + pos][i * info->dof + field];
+
+            // First derivative in z direction
+            indz[field] += myd1StenGrid.at(pos) * aY[k - info->sw + pos][j][i * info->dof + field];
+          }
+        }
+
+        if (myd2StenGrid.has_value()) {
+          std::fill(ind2x->begin(), ind2x->end(), 0);
+          std::fill(ind2y->begin(), ind2y->end(), 0);
+          std::fill(ind2z->begin(), ind2z->end(), 0);
+
+          for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+            for (PetscInt field = 0; field < info->dof; ++field) {
+              // Second derivative in x direction
+              ind2x->at(field) += myd2StenGrid->at(pos) * aY[k][j][(i - info->sw + pos) * info->dof + field];
+
+              // Second derivative in y direction
+              ind2y->at(field) += myd2StenGrid->at(pos) * aY[k][j - info->sw + pos][i * info->dof + field];
+
+              // Second derivative in z direction
+              ind2z->at(field) += myd2StenGrid->at(pos) * aY[k - info->sw + pos][j][i * info->dof + field];
+            }
+          }
+        }
+
+        if (myd3StenGrid.has_value()) {
+          std::fill(ind3x->begin(), ind3x->end(), 0);
+          std::fill(ind3y->begin(), ind3y->end(), 0);
+          std::fill(ind3z->begin(), ind3z->end(), 0);
+
+          for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+            for (PetscInt field = 0; field < info->dof; ++field) {
+              // Third derivative in x direction
+              ind3x->at(field) += myd3StenGrid->at(pos) * aY[k][j][(i - info->sw + pos) * info->dof + field];
+
+              // Third derivative in y direction
+              ind3y->at(field) += myd3StenGrid->at(pos) * aY[k][j - info->sw + pos][i * info->dof + field];
+
+              // Third derivative in z direction
+              ind3z->at(field) += myd3StenGrid->at(pos) * aY[k - info->sw + pos][j][i * info->dof + field];
+            }
+          }
+        }
+
+        pwrap->Base::m_myPDE->LHSOpAsplit(
+          ayVec, ayDotVec, indx, indy, indz, ind2x, ind2y, ind2z, ind3x, ind3y, ind3z, afASplitVec);
+
+        pwrap->Base::m_myPDE->LHSOpBsplit(
+          ayVec, ayDotVec, indx, indy, indz, ind2x, ind2y, ind2z, ind3x, ind3y, ind3z, afBSplitVec);
+
+        for (PetscInt field = 0; field < info->dof; ++field) {
+          aF[k][j][i * info->dof + field] = afASplitVec[field] + afBSplitVec[field];
+        }
+      }
+    }
+  }
+
+  pwrap->m_user.iFuncCalled = PETSC_TRUE;
+
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 template<std::semiregular PDEOptions>
@@ -2228,272 +2227,237 @@ auto PetscWrap<PDEOptions>::FormIJacobianLocal3d(DMDALocalInfo* info,
   Mat precondMat,
   void* pwp) -> PetscErrorCode
 {
-  assert(info and info->dim == 3);
+  PetscFunctionBeginUser;
 
-  auto* petscWrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
-  petscWrap->m_user.iJacobianCalled = PETSC_TRUE;
+  auto* const pwrap = static_cast<PetscWrap<PDEOptions>*>(pwp);
 
-  assert(!petscWrap->m_methodProps.fields.empty() and "Fields have not been set");
-  assert(petscWrap->BaseClass::m_myPDE != nullptr && "PDE has not been set");
+  PetscCheck(info and info->dim == 3,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONG,
+    "Wrong number of dimensions or DMDALocalInfo has not been initialized");
+  PetscCheck(pwrap->Base::m_myPDE != nullptr, PETSC_COMM_WORLD, PETSC_ERR_ARG_NULL, "The PDE system has not been set");
+  PetscCheck(std::ssize(pwrap->m_methodProps.fields) == info->dof,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_INCOMP,
+    "The number of fields and dof must be equal");
 
-  auto const& stenData = petscWrap->m_myStencilData;
-  auto const numFields = std::size(petscWrap->m_methodProps.fields);
+  // std::vectors for aY, and aYdot
 
-  assert(std::cmp_equal(numFields, info->dof));
+  auto ayVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
+  auto ayDotVec = std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0);
 
-  // If the vectors aren't the right size, resize them once
-  if (petscWrap->m_inTmp.size() != numFields) {
-    petscWrap->m_inTmp.resize(numFields);
-  }
+  // std::vectors for stencil grid weights
 
-  // Set up time derivative container
+  auto const& myd1StenGrid = pwrap->m_myStencilGridd;
+  auto const& myd2StenGrid = pwrap->m_myStencilGridd2;
+  auto const& myd3StenGrid = pwrap->m_myStencilGridd3;
 
-  if (petscWrap->m_dTime.size() != numFields) {
-    petscWrap->m_dTime.resize(numFields);
-  }
+  // std::vectors for storing stencil grid contributions
 
-  // Set up first-order derivative containers
+  auto [indx, indy, indz] = std::make_tuple(std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+    std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+    std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0));
 
-  if (petscWrap->m_indx.size() != numFields) {
-    petscWrap->m_indx.resize(numFields);
-  }
+  using TripleOfOptionalVectors = std::tuple<std::optional<std::vector<PetscReal>>,
+    std::optional<std::vector<PetscReal>>,
+    std::optional<std::vector<PetscReal>>>;
 
-  if (petscWrap->m_indy.size() != numFields) {
-    petscWrap->m_indy.resize(numFields);
-  }
-
-  if (petscWrap->m_indz.size() != numFields) {
-    petscWrap->m_indz.resize(numFields);
-  }
-
-  auto const stencilWidth = std::invoke(
-    [&stenData, &info]
+  auto [ind2x, ind2y, ind2z] = std::invoke(
+    [&info, &myd2StenGrid]() -> TripleOfOptionalVectors
     {
-      if (info->dim == 1) {
-        return stenData[2];
+      if (myd2StenGrid.has_value()) {
+        return {std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0)};
       }
 
-      if (info->dim == 2) {
-        return stenData[3];
-      }
-
-      return stenData[4];
+      return {std::nullopt, std::nullopt, std::nullopt};
     });
 
-  if (std::cmp_not_equal(petscWrap->m_vTmp.size(), stencilWidth)) {
-    petscWrap->m_vTmp.resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_vdTmp.size(), stencilWidth)) {
-    petscWrap->m_vdTmp.resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_vd2Tmp->size(), stencilWidth)) {
-    petscWrap->m_vd2Tmp->resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_vd3Tmp->size(), stencilWidth)) {
-    petscWrap->m_vd3Tmp->resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_vTmpTmp.size(), stencilWidth)) {
-    petscWrap->m_vTmpTmp.resize(stencilWidth);
-  }
-  if (std::cmp_not_equal(petscWrap->m_colTmp.size(), stencilWidth)) {
-    petscWrap->m_colTmp.resize(stencilWidth);
-  }
+  auto [ind3x, ind3y, ind3z] = std::invoke(
+    [&info, &myd3StenGrid]() -> TripleOfOptionalVectors
+    {
+      if (myd3StenGrid.has_value()) {
+        return {std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(info->dof), 0)};
+      }
 
-  // Set up second-order derivative containers
+      return {std::nullopt, std::nullopt, std::nullopt};
+    });
 
-  if (petscWrap->m_myStencilGridd2.has_value()) {
-    if (!petscWrap->m_ind2x.has_value()) {
-      petscWrap->m_ind2x = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind2x->size() != numFields) {
-      petscWrap->m_ind2x->resize(numFields);
-    }
-  }
+  // We're only interested in the per-axis neighbours of the current grid point
+  auto const stencilSize = (2 * info->sw) + 1;
 
-  if (petscWrap->m_myStencilGridd2.has_value()) {
-    if (!petscWrap->m_ind2y.has_value()) {
-      petscWrap->m_ind2y = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind2y->size() != numFields) {
-      petscWrap->m_ind2y->resize(numFields);
-    }
-  }
+  auto rowSten = MatStencil {};
+  auto colStenVec = std::vector<MatStencil>(static_cast<std::size_t>(stencilSize), MatStencil {});
 
-  if (petscWrap->m_myStencilGridd2.has_value()) {
-    if (!petscWrap->m_ind2z.has_value()) {
-      petscWrap->m_ind2z = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind2z->size() != numFields) {
-      petscWrap->m_ind2z->resize(numFields);
-    }
-  }
+  auto vVec = std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0);
 
-  // Set up third-order derivative containers
+  auto vTmp = std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0);
 
-  if (petscWrap->m_myStencilGridd3.has_value()) {
-    if (!petscWrap->m_ind3x.has_value()) {
-      petscWrap->m_ind3x = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind3x->size() != numFields) {
-      petscWrap->m_ind3x->resize(numFields);
-    }
-  }
+  auto [vdASplit, vdBSplit] = std::make_pair(std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0),
+    std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0));
 
-  if (petscWrap->m_myStencilGridd3.has_value()) {
-    if (!petscWrap->m_ind3y.has_value()) {
-      petscWrap->m_ind3y = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind3y->size() != numFields) {
-      petscWrap->m_ind3y->resize(numFields);
-    }
-  }
+  using PairOfOptionalVectors = std::pair<std::optional<std::vector<PetscReal>>, std::optional<std::vector<PetscReal>>>;
 
-  if (petscWrap->m_myStencilGridd3.has_value()) {
-    if (!petscWrap->m_ind3z.has_value()) {
-      petscWrap->m_ind3z = std::vector<PetscReal>(numFields);
-    }
-    else if (petscWrap->m_ind3z->size() != numFields) {
-      petscWrap->m_ind3z->resize(numFields);
-    }
-  }
+  auto [vd2ASplit, vd2BSplit] = std::invoke(
+    [&stencilSize, &myd2StenGrid]() -> PairOfOptionalVectors
+    {
+      if (myd2StenGrid.has_value()) {
+        return {std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0)};
+      }
 
-  auto& rowTmp = petscWrap->m_rowTmp;
-  auto& inTmp = petscWrap->m_inTmp;
-  auto& dTime = petscWrap->m_dTime;
+      return {std::nullopt, std::nullopt};
+    });
 
-  auto const& myd1StenGrid = petscWrap->m_myStencilGridd;
-  auto const& myd2StenGrid = petscWrap->m_myStencilGridd2;
-  auto const& myd3StenGrid = petscWrap->m_myStencilGridd3;
+  auto [vd3ASplit, vd3BSplit] = std::invoke(
+    [&stencilSize, &myd3StenGrid]() -> PairOfOptionalVectors
+    {
+      if (myd3StenGrid.has_value()) {
+        return {std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0),
+          std::vector<PetscReal>(static_cast<std::size_t>(stencilSize), 0)};
+      }
 
-  auto& indx = petscWrap->m_indx;
-  auto& ind2x = petscWrap->m_ind2x;
-  auto& ind3x = petscWrap->m_ind3x;
-
-  auto& indy = petscWrap->m_indy;
-  auto& ind2y = petscWrap->m_ind2y;
-  auto& ind3y = petscWrap->m_ind3y;
-
-  auto& indz = petscWrap->m_indz;
-  auto& ind2z = petscWrap->m_ind2z;
-  auto& ind3z = petscWrap->m_ind3z;
-
-  auto& vTmp = petscWrap->m_vTmp;
-  auto& vdTmp = petscWrap->m_vdTmp;
-  auto& vd2Tmp = petscWrap->m_vd2Tmp;
-  auto& vd3Tmp = petscWrap->m_vd3Tmp;
-  auto& vTmpTmp = petscWrap->m_vTmpTmp;
-  auto& colTmp = petscWrap->m_colTmp;
-
-  PetscInt const xGridPts = info->xm;
-  PetscInt const yGridPts = info->ym;
-
-  auto const netWidth = static_cast<PetscInt>(std::floor(stencilWidth / 2));
+      return {std::nullopt, std::nullopt};
+    });
 
   if (info->bx == DM_BOUNDARY_GHOSTED and info->by == DM_BOUNDARY_GHOSTED and info->bz == DM_BOUNDARY_GHOSTED) {
-    FillGhostCells3d(petscWrap->m_da, petscWrap->m_info);
+    FillGhostCells3d(*info, aY);
   }
+
+  PetscAssert(info->st == DMDA_STENCIL_STAR,
+    PETSC_COMM_WORLD,
+    PETSC_ERR_ARG_WRONGSTATE,
+    "This function implementation currently assumes the use of DMDA_STENCIL_STAR");
+
+  PetscCall(MatZeroEntries(precondMat));
 
   // Assemble Jacobian for 3D domain
   for (PetscInt k = info->zs; k < info->zs + info->zm; ++k) {
-    rowTmp.k = k;
-
     for (PetscInt j = info->ys; j < info->ys + info->ym; ++j) {
-      rowTmp.j = j;
-
       for (PetscInt i = info->xs; i < info->xs + info->xm; ++i) {
-        for (PetscInt field = 0; field < info->dof; ++field) {
-          inTmp[field] = aY[k][j][i * info->dof + field];
-          dTime[field] = aYdot[k][j][i * info->dof + field];
-        }
+        std::copy_n(&aY[k][j][i * info->dof], info->dof, ayVec.begin());
+        std::copy_n(&aYdot[k][j][i * info->dof], info->dof, ayDotVec.begin());
 
         // Compute stencil contributions from spatial derivatives
-        if (myd1StenGrid.has_value()) {
-          std::fill(indx.begin(), indx.end(), 0);
+        std::fill(indx.begin(), indx.end(), 0);
+        std::fill(indy.begin(), indy.end(), 0);
+        std::fill(indz.begin(), indz.end(), 0);
 
-          for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-            for (PetscInt field = 0; field < info->dof; ++field) {
-              // First derivative in x-direction
-              indx[field] += myd1StenGrid->at(pos) * aY[k][j][(i - netWidth + pos) * info->dof + field];
+        for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+          for (PetscInt field = 0; field < info->dof; ++field) {
+            // First derivative in x-direction
+            indx[field] += myd1StenGrid.at(pos) * aY[k][j][(i - info->sw + pos) * info->dof + field];
 
-              // First derivative in y-direction
-              indy[field] += myd1StenGrid->at(pos) * aY[k][j - netWidth + pos][i * info->dof + field];
+            // First derivative in y-direction
+            indy[field] += myd1StenGrid.at(pos) * aY[k][j - info->sw + pos][i * info->dof + field];
 
-              // First derivative in z-direction
-              indz[field] += myd1StenGrid->at(pos) * aY[k - netWidth + pos][j][i * info->dof + field];
-            }
+            // First derivative in z-direction
+            indz[field] += myd1StenGrid.at(pos) * aY[k - info->sw + pos][j][i * info->dof + field];
           }
         }
 
         if (myd2StenGrid.has_value()) {
           std::fill(ind2x->begin(), ind2x->end(), 0);
+          std::fill(ind2y->begin(), ind2y->end(), 0);
+          std::fill(ind2z->begin(), ind2z->end(), 0);
 
-          for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
+          for (PetscInt pos = 0; pos < stencilSize; ++pos) {
             for (PetscInt field = 0; field < info->dof; ++field) {
               // Second derivative in x-direction
-              ind2x->at(field) += myd2StenGrid->at(pos) * aY[k][j][(i - netWidth + pos) * info->dof + field];
+              ind2x->at(field) += myd2StenGrid->at(pos) * aY[k][j][(i - info->sw + pos) * info->dof + field];
 
               // Second derivative in y-direction
-              ind2y->at(field) += myd2StenGrid->at(pos) * aY[k][j - netWidth + pos][i * info->dof + field];
+              ind2y->at(field) += myd2StenGrid->at(pos) * aY[k][j - info->sw + pos][i * info->dof + field];
 
               // Second derivative in z-direction
-              ind2z->at(field) += myd2StenGrid->at(pos) * aY[k - netWidth + pos][j][i * info->dof + field];
+              ind2z->at(field) += myd2StenGrid->at(pos) * aY[k - info->sw + pos][j][i * info->dof + field];
             }
           }
         }
 
-        if (myd3StenGrid.has_value() and ind3x.has_value()) {
+        if (myd3StenGrid.has_value()) {
           std::fill(ind3x->begin(), ind3x->end(), 0);
+          std::fill(ind3y->begin(), ind3y->end(), 0);
+          std::fill(ind3z->begin(), ind3z->end(), 0);
 
-          for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
+          for (PetscInt pos = 0; pos < stencilSize; ++pos) {
             for (PetscInt field = 0; field < info->dof; ++field) {
               // Third derivative in x direction
-              ind3x->at(field) += myd3StenGrid->at(pos) * aY[k][j][(i - netWidth + pos) * info->dof + field];
+              ind3x->at(field) += myd3StenGrid->at(pos) * aY[k][j][(i - info->sw + pos) * info->dof + field];
 
               // Third derivative in y direction
-              ind3y->at(field) += myd3StenGrid->at(pos) * aY[k][j - netWidth + pos][i * info->dof + field];
+              ind3y->at(field) += myd3StenGrid->at(pos) * aY[k][j - info->sw + pos][i * info->dof + field];
 
               // Third derivative in z direction
-              ind3z->at(field) += myd3StenGrid->at(pos) * aY[k - netWidth + pos][j][i * info->dof + field];
+              ind3z->at(field) += myd3StenGrid->at(pos) * aY[k - info->sw + pos][j][i * info->dof + field];
             }
           }
         }
 
-        // Set row index for current 3D point
-        rowTmp.i = i;
-
         // Assemble Jacobian entries for all field contributions
-        for (std::size_t compRow = 0; compRow < numFields; ++compRow) {
-          rowTmp.c = compRow;
+        for (PetscInt compRow = 0; compRow < info->dof; ++compRow) {
+          rowSten = {.k = k, .j = j, .i = i, .c = compRow};
 
-          for (std::size_t compCol = 0; compCol < numFields; ++compCol) {
-            std::fill(vTmp.begin(), vTmp.end(), 0.0);
-
-            petscWrap->BaseClass::m_myPDE->JacLHSOpAsplit(
-              inTmp, dTime, indx, indy, indz, ind2x, ind2y, ind2z, ind3x, ind3y, ind3z, vTmpTmp, compRow, compCol, 0);
-
-            for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-              vTmp[pos] += vTmpTmp[pos];
+          for (PetscInt compCol = 0; compCol < info->dof; ++compCol) {
+            for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+              colStenVec[pos] = {
+                .k = k - info->sw + pos, .j = j - info->sw + pos, .i = i - info->sw + pos, .c = compCol};
             }
 
+            std::fill(vVec.begin(), vVec.end(), 0.0);
+
+            pwrap->Base::m_myPDE->JacLHSOpBsplit(
+              ayVec, ayDotVec, indx, indy, indz, ind2x, ind2y, ind2z, ind3x, ind3y, ind3z, vTmp, compRow, compCol, 0);
+
             if (compRow == compCol) {
-              vTmp[netWidth] += shift;
+              vVec[info->sw] += shift;
             }
 
             // Compute diagonal term (time derivative + LHS operator)
-            if (myd1StenGrid.has_value()) {
-              petscWrap->BaseClass::m_myPDE->JacLHSOpAsplit(
-                inTmp, dTime, indx, indy, indz, ind2x, ind2y, ind2z, ind3x, ind3y, ind3z, vdTmp, compRow, compCol, 1);
+            pwrap->Base::m_myPDE->JacLHSOpAsplit(ayVec,
+              ayDotVec,
+              indx,
+              indy,
+              indz,
+              ind2x,
+              ind2y,
+              ind2z,
+              ind3x,
+              ind3y,
+              ind3z,
+              vdASplit,
+              compRow,
+              compCol,
+              1);
 
-              // Compute stencil contributions from first derivative
-              for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-                vTmp[pos] += myd1StenGrid->at(pos) * vdTmp[pos];
-              }
+            pwrap->Base::m_myPDE->JacLHSOpBsplit(ayVec,
+              ayDotVec,
+              indx,
+              indy,
+              indz,
+              ind2x,
+              ind2y,
+              ind2z,
+              ind3x,
+              ind3y,
+              ind3z,
+              vdBSplit,
+              compRow,
+              compCol,
+              1);
+
+            // Compute stencil contributions from first derivative
+            for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+              vVec[pos] += myd1StenGrid.at(pos) * (vdASplit[pos] + vdBSplit[pos]);
             }
 
             // Compute second derivative contributions (if available)
             if (myd2StenGrid.has_value()) {
-              petscWrap->BaseClass::m_myPDE->JacLHSOpAsplit(inTmp,
-                dTime,
+              pwrap->Base::m_myPDE->JacLHSOpAsplit(ayVec,
+                ayDotVec,
                 indx,
                 indy,
                 indz,
@@ -2503,21 +2467,37 @@ auto PetscWrap<PDEOptions>::FormIJacobianLocal3d(DMDALocalInfo* info,
                 ind3x,
                 ind3y,
                 ind3z,
-                vd2Tmp.value(),
+                vd2ASplit.value(),
+                compRow,
+                compCol,
+                2);
+
+              pwrap->Base::m_myPDE->JacLHSOpBsplit(ayVec,
+                ayDotVec,
+                indx,
+                indy,
+                indz,
+                ind2x,
+                ind2y,
+                ind2z,
+                ind3x,
+                ind3y,
+                ind3z,
+                vd2BSplit.value(),
                 compRow,
                 compCol,
                 2);
 
               // Compute off-diagonal Jacobian contributions from spatial stencil
-              for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-                vTmp[pos] += myd2StenGrid->at(pos) * vd2Tmp->at(pos);
+              for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+                vVec[pos] += myd2StenGrid->at(pos) * (vd2ASplit->at(pos) + vd2BSplit->at(pos));
               }
             }
 
             // Compute third derivative contributions (if available)
             if (myd3StenGrid.has_value()) {
-              petscWrap->BaseClass::m_myPDE->JacLHSOpAsplit(inTmp,
-                dTime,
+              pwrap->Base::m_myPDE->JacLHSOpAsplit(ayVec,
+                ayDotVec,
                 indx,
                 indy,
                 indz,
@@ -2527,26 +2507,35 @@ auto PetscWrap<PDEOptions>::FormIJacobianLocal3d(DMDALocalInfo* info,
                 ind3x,
                 ind3y,
                 ind3z,
-                vd3Tmp.value(),
+                vd3ASplit.value(),
+                compRow,
+                compCol,
+                3);
+
+              pwrap->Base::m_myPDE->JacLHSOpBsplit(ayVec,
+                ayDotVec,
+                indx,
+                indy,
+                indz,
+                ind2x,
+                ind2y,
+                ind2z,
+                ind3x,
+                ind3y,
+                ind3z,
+                vd3BSplit.value(),
                 compRow,
                 compCol,
                 3);
 
               // Compute off-diagonal Jacobian contributions from spatial stencil
-              for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-                vTmp[pos] += myd3StenGrid->at(pos) * vd3Tmp->at(pos);
+              for (PetscInt pos = 0; pos < stencilSize; ++pos) {
+                vVec[pos] += myd3StenGrid->at(pos) * (vd3ASplit->at(pos) + vd3BSplit->at(pos));
               }
             }
 
-            for (PetscInt pos = 0; pos < stencilWidth; ++pos) {
-              colTmp[pos].i = i - netWidth + pos;
-              colTmp[pos].j = j;
-              colTmp[pos].k = k;
-              colTmp[pos].c = compCol;
-            }
-
             PetscCall(
-              MatSetValuesStencil(precondMat, 1, &rowTmp, stencilWidth, colTmp.data(), vTmp.data(), INSERT_VALUES));
+              MatSetValuesStencil(precondMat, 1, &rowSten, stencilSize, colStenVec.data(), vVec.data(), INSERT_VALUES));
           }
         }
       }
@@ -2561,7 +2550,9 @@ auto PetscWrap<PDEOptions>::FormIJacobianLocal3d(DMDALocalInfo* info,
     PetscCall(MatAssemblyEnd(asmMat, MAT_FINAL_ASSEMBLY));
   }
 
-  return 0;
+  pwrap->m_user.iJacobianCalled = PETSC_TRUE;
+
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 }  // namespace fcfd::pdenumerics
